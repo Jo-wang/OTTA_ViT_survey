@@ -7,10 +7,11 @@ import torch.nn as nn
 import torch.optim as optim
 import torchvision
 import torchvision.transforms as transforms
+from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
 
 from models.source_model import get_model
 
-from conf import cfg, load_cfg_fom_args, get_num_classes
+from conf import cfg, load_cfg_fom_args
 
 os.environ["CUDA_VISIBLE_DEVICES"] = '0'
 
@@ -37,103 +38,69 @@ def train(description, path):
 
     criterion = nn.CrossEntropyLoss()
     if cfg.OPTIM.METHOD == "sgd":
-        optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
+        optimizer = optim.SGD(model.parameters(), lr=cfg.OPTIM.LR, momentum=0.9)
     elif cfg.OPTIM.METHOD == "Adam":
         optimizer = optim.Adam(model.parameters(), lr=0.001)
 
+    if cfg.CORRUPTION.DATASET == 'cifar10':
+        scheduler = CosineAnnealingWarmRestarts(optimizer, T_0=200, T_mult=1, eta_min=0.001)
+    if cfg.CORRUPTION.DATASET == 'cifar100':
+        scheduler = CosineAnnealingWarmRestarts(optimizer, T_0=500, T_mult=1, eta_min=0.001)
+
     trainset = torchvision.datasets.CIFAR10(root=cfg.DIR, train=True,
                                         download=True, transform=transform)
-    # Split trainset into train and validation sets
-    train_size = int(0.8 * len(trainset))
-    val_size = len(trainset) - train_size
-    trainset, valset = torch.utils.data.random_split(trainset, [train_size, val_size])
-
     testset = torchvision.datasets.CIFAR10(root=cfg.DIR, train=False,
                                            download=True, transform=transform)
+    dataset = torch.utils.data.ConcatDataset([trainset, testset])
 
     # Define data loaders
-    trainloader = torch.utils.data.DataLoader(trainset, batch_size=200,
-                                              shuffle=True, num_workers=2)
-    valloader = torch.utils.data.DataLoader(valset, batch_size=100,
-                                            shuffle=False, num_workers=2)
-    testloader = torch.utils.data.DataLoader(testset, batch_size=100,
-                                             shuffle=False, num_workers=2)
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=cfg.TEST.BATCH_SIZE,
+                                              shuffle=True, num_workers=8)
+   
+    for iteration in range(cfg.OPTIM.ITER):
+        # Set learning rate for warm-up phase
+        if iteration < cfg.OPTIM.WARMUP:
+            lr = 0.1 * (iteration / cfg.OPTIM.WARMUP)
+            for param_group in optimizer.param_groups:
+                param_group['lr'] = lr
 
-    for epoch in range(cfg.OPTIM.EPOCH):
-        # Training
-        model.train()
-        train_loss = 0.0
-        correct = 0
-        total = 0
-        best_model_weights = None
+        # Move data to device
+        inputs, labels = next(iter(dataloader))
+        inputs = inputs.to(device)
+        labels = labels.to(device)
 
-        for i, data in enumerate(trainloader, 0):
-            inputs, labels = data[0].to(device), data[1].to(device)
+        # Forward pass
+        outputs = model(inputs)
+        loss = criterion(outputs, labels)
 
-            optimizer.zero_grad()
-            outputs = model(inputs)
-            loss = criterion(outputs, labels)
-            loss.backward()
-            optimizer.step()
+        # Backward pass and optimization
+        optimizer.zero_grad()
+        loss.backward()
+        nn.utils.clip_grad_norm_(model.parameters(), 1.0)  # Gradient clipping
+        optimizer.step()
 
-            train_loss += loss.item()
-            _, predicted = outputs.max(1)
-            total += labels.size(0)
-            correct += predicted.eq(labels).sum().item()
+        # Update the scheduler
+        scheduler.step()
 
-        train_acc = 100.0 * correct / total
-        avg_train_loss = train_loss / len(trainloader)
+        # Print progress
+        if (iteration + 1) % 100 == 0:
+            print(f"Iteration [{iteration + 1}/{cfg.OPTIM.ITER}]\tLoss: {loss.item()}")
 
-        # Validation
-        model.eval()
-        val_loss = 0.0
-        correct = 0
-        total = 0
-
-        with torch.no_grad():
-            for data in valloader:
-                inputs, labels = data[0].to(device), data[1].to(device)
-
-                outputs = model(inputs)
-                loss = criterion(outputs, labels)
-
-                val_loss += loss.item()
-                _, predicted = outputs.max(1)
-                total += labels.size(0)
-                correct += predicted.eq(labels).sum().item()
-
-        val_acc = 100.0 * correct / total
-        avg_val_loss = val_loss / len(valloader)
-
-        # Print epoch results
-        print(f"Epoch [{epoch+1}/{cfg.OPTIM.EPOCH}] - "
-              f"Train Loss: {avg_train_loss:.4f} - Train Acc: {train_acc:.2f}% - "
-              f"Val Loss: {avg_val_loss:.4f} - Val Acc: {val_acc:.2f}%")
-        
-        logger.info(f"Epoch [{epoch+1}/{cfg.OPTIM.EPOCH}] - "
-              f"Train Loss: {avg_train_loss:.4f} - Train Acc: {train_acc:.2f}% - "
-              f"Val Loss: {avg_val_loss:.4f} - Val Acc: {val_acc:.2f}%")
-
-        # Save the best model weights based on validation accuracy
-        if epoch == 0:
-            best_val_acc = val_acc
-            best_model_weights = copy.deepcopy(model.state_dict())
-        if val_acc > best_val_acc:
-            best_val_acc = val_acc
-            best_model_weights = copy.deepcopy(model.state_dict())
+       
+    best_model_weights = copy.deepcopy(model.state_dict())
 
     # Load the best model weights
     
     model.load_state_dict(best_model_weights)
 
-    # Ev    aluate on test set
+    # Evaluate on test set
     model.eval()
     test_loss = 0.0
     correct = 0
     total = 0
 
     with torch.no_grad():
-        for data in testloader:
+        for data in dataloader:
             inputs, labels = data[0].to(device), data[1].to(device)
 
             outputs = model(inputs)
@@ -145,12 +112,12 @@ def train(description, path):
             correct += predicted.eq(labels).sum().item()
 
     test_acc = 100.0 * correct / total
-    avg_test_loss = test_loss / len(testloader)
+    avg_test_loss = test_loss / len(dataloader)
     save_path = cfg.SAVE_PATH + cfg.CORRUPTION.DATASET + str(test_acc) + ".pth"
     torch.save(best_model_weights, save_path)
    
-    print(f"Test Loss: {avg_test_loss:.4f} - Test Acc: {test_acc:.2f}%")
-    logger.info(f"Test Loss: {avg_test_loss:.4f} - Test Acc: {test_acc:.2f}%")
+    print(f"Final Loss: {avg_test_loss:.4f} - Final Acc: {test_acc:.2f}%")
+    logger.info(f"Final Loss: {avg_test_loss:.4f} - Final Acc: {test_acc:.2f}%")
 
 
 

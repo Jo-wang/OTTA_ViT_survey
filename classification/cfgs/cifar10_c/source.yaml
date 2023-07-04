@@ -3,12 +3,14 @@ MODEL:
   ARCH: vit_base_patch16_224
 
 OPTIM:
-  EPOCH: 100
-  METHOD: Adam
+  ITER: 2000
+  WARMUP: 400
+  METHOD: sgd
+  LR: 0.03
 
 
 TEST:
-  BATCH_SIZE: 200
+  BATCH_SIZE: 256
 CORRUPTION:
   DATASET: cifar10
 
