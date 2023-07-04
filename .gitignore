@@ -129,3 +129,5 @@ dmypy.json
 .pyre/
 
 .txt
+classification/output/
+classification/cfgs/
