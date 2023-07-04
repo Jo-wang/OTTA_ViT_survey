@@ -24,7 +24,7 @@ def train(description, path):
 
     load_cfg_fom_args(description, path)
     
-    num_classes = get_num_classes(dataset_name=cfg.CORRUPTION.DATASET)
+    # num_classes = get_num_classes(dataset_name=cfg.CORRUPTION.DATASET)
     model = get_model(cfg).to(device)
 
     logger.info(f"Using the backbone: {cfg.MODEL.ARCH}")
