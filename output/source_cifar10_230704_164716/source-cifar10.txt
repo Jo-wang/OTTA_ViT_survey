@@ -1,0 +1,107 @@
+[23/07/04 16:47:16] [conf.py:  356]: PyTorch Version: torch=1.10.0, cuda=11.3, cudnn=8200
+[23/07/04 16:47:16] [conf.py:  357]: ADACONTRAST:
+  ALPHA: 1.0
+  BETA: 1.0
+  CE_SUP_TYPE: weak_strong
+  CE_TYPE: standard
+  CONTRAST_TYPE: class_aware
+  DIST_TYPE: cosine
+  ETA: 1.0
+  NUM_NEIGHBORS: 10
+  QUEUE_SIZE: 16384
+  REFINE_METHOD: nearest_neighbors
+BN:
+  ALPHA: 0.1
+CKPT_DIR: ./ckpt
+CKPT_PATH: 
+CONTRAST:
+  MODE: all
+  PROJECTION_DIM: 128
+  TEMPERATURE: 0.1
+CORRUPTION:
+  DATASET: cifar10
+  NUM_EX: -1
+  SEVERITY: [5, 4, 3, 2, 1]
+  TYPE: ['gaussian_noise', 'shot_noise', 'impulse_noise', 'defocus_blur', 'glass_blur', 'motion_blur', 'zoom_blur', 'snow', 'frost', 'fog', 'brightness', 'contrast', 'elastic_transform', 'pixelate', 'jpeg_compression']
+COTTA:
+  AP: 0.92
+  RST: 0.01
+CUDNN:
+  BENCHMARK: True
+DATA_DIR: ./data
+DESC: 
+DETERMINISM: False
+DIR: /home/uqzxwang/data/TTA/source_set/
+EATA:
+  D_MARGIN: 0.05
+  FISHER_ALPHA: 2000
+  NUM_SAMPLES: 2000
+GTTA:
+  LAMBDA_MIXUP: 0.3333333333333333
+  PRETRAIN_STEPS_ADAIN: 20000
+  STEPS_ADAIN: 1
+  USE_STYLE_TRANSFER: False
+LAME:
+  AFFINITY: rbf
+  FORCE_SYMMETRY: False
+  KNN: 5
+  SIGMA: 1.0
+LOG_DEST: source-cifar10.txt
+LOG_TIME: 230704_164716
+MODEL:
+  ADAPTATION: source
+  ARCH: vit_base_patch16_224
+  EPISODIC: False
+  WEIGHTS: IMAGENET1K_V1
+M_TEACHER:
+  MOMENTUM: 0.999
+OPTIM:
+  BETA: 0.9
+  DAMPENING: 0.0
+  ITER: 2000
+  LR: 0.03
+  METHOD: sgd
+  MOMENTUM: 0.9
+  NESTEROV: True
+  STEPS: 1
+  WARMUP: 400
+  WD: 0.0
+RMT:
+  LAMBDA_CE_SRC: 1.0
+  LAMBDA_CE_TRG: 1.0
+  LAMBDA_CONT: 1.0
+  NUM_SAMPLES_WARM_UP: 50000
+RNG_SEED: 1
+ROID:
+  MOMENTUM_PROBS: 0.9
+  MOMENTUM_SRC: 0.99
+  TEMPERATURE: 0.3333333333333333
+  USE_CONSISTENCY: True
+  USE_PRIOR_CORRECTION: True
+  USE_WEIGHTING: True
+ROTTA:
+  ALPHA: 0.05
+  LAMBDA_T: 1.0
+  LAMBDA_U: 1.0
+  MEMORY_SIZE: 64
+  NU: 0.001
+  UPDATE_FREQUENCY: 64
+SAR:
+  RESET_CONSTANT_EM: 0.2
+SAVE_DIR: ./output/source_cifar10_230704_164716
+SAVE_PATH: /home/uqzxwang/checkpoint/TTA/source/
+SETTING: continual
+SOURCE:
+  NUM_WORKERS: 4
+  PERCENTAGE: 1.0
+TEST:
+  ALPHA_DIRICHLET: 0.0
+  BATCH_SIZE: 256
+  NUM_WORKERS: 4
+  N_AUGMENTATIONS: 32
+  WINDOW_LENGTH: 1
+[23/07/04 16:47:17] [source_model.py:   26]: Successfully restored the weights of 'vit_base_patch16_224' from timm.
+[23/07/04 16:47:17] [source_model.py:   35]: General model information: {'url': 'https://storage.googleapis.com/vit_models/augreg/B_16-i21k-300ep-lr_0.001-aug_medium1-wd_0.1-do_0.0-sd_0.0--imagenet2012-steps_20k-lr_0.01-res_224.npz', 'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': None, 'crop_pct': 0.9, 'interpolation': 'bicubic', 'fixed_input_size': True, 'mean': (0.5, 0.5, 0.5), 'std': (0.5, 0.5, 0.5), 'first_conv': 'patch_embed.proj', 'classifier': 'head', 'architecture': 'vit_base_patch16_224'}
+[23/07/04 16:47:17] [source_model.py:   36]: Adding input normalization to the model using: mean=(0.5, 0.5, 0.5) 	 std=(0.5, 0.5, 0.5)
+[23/07/04 16:47:19] [source_training.py:   31]: Using the backbone: vit_base_patch16_224
+[23/07/04 16:47:19] [source_training.py:   32]: Using the following source dataset: cifar10
