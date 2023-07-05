@@ -113,7 +113,7 @@ def train(description, path):
 
     test_acc = 100.0 * correct / total
     avg_test_loss = test_loss / len(dataloader)
-    save_path = cfg.SAVE_PATH + cfg.CORRUPTION.DATASET + str(test_acc) + ".pth"
+    save_path = cfg.SAVE_PATH + cfg.CORRUPTION.DATASET + "_" + str(test_acc) + ".pth"
     torch.save(best_model_weights, save_path)
    
     print(f"Final Loss: {avg_test_loss:.4f} - Final Acc: {test_acc:.2f}%")
