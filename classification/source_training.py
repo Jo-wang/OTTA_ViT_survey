@@ -13,7 +13,7 @@ from models.source_model import get_model
 
 from conf import cfg, load_cfg_fom_args
 
-os.environ["CUDA_VISIBLE_DEVICES"] = '0'
+os.environ["CUDA_VISIBLE_DEVICES"] = '1'
 
 logger = logging.getLogger(__name__)
 
@@ -42,20 +42,30 @@ def train(description, path):
     elif cfg.OPTIM.METHOD == "Adam":
         optimizer = optim.Adam(model.parameters(), lr=0.001)
 
+    scheduler = CosineAnnealingWarmRestarts(optimizer, T_0=int(0.1*cfg.OPTIM.ITER), T_mult=2, eta_min=0.001)
+    
     if cfg.CORRUPTION.DATASET == 'cifar10':
-        scheduler = CosineAnnealingWarmRestarts(optimizer, T_0=200, T_mult=1, eta_min=0.001)
-    if cfg.CORRUPTION.DATASET == 'cifar100':
-        scheduler = CosineAnnealingWarmRestarts(optimizer, T_0=500, T_mult=1, eta_min=0.001)
-
-    trainset = torchvision.datasets.CIFAR10(root=cfg.DIR, train=True,
+        trainset = torchvision.datasets.CIFAR10(root=cfg.DIR, train=True,
                                         download=True, transform=transform)
-    testset = torchvision.datasets.CIFAR10(root=cfg.DIR, train=False,
+        testset = torchvision.datasets.CIFAR10(root=cfg.DIR, train=False,
                                            download=True, transform=transform)
+    elif cfg.CORRUPTION.DATASET == 'cifar100':
+        trainset = torchvision.datasets.CIFAR100(root=cfg.DIR, train=True,
+                                        download=True, transform=transform)
+        testset = torchvision.datasets.CIFAR100(root=cfg.DIR, train=False,
+                                           download=True, transform=transform)
+    elif cfg.CORRUPTION.DATASET == 'imagenet':
+        trainset = torchvision.datasets.ImageNet(root=cfg.DIR, train=True,
+                                        download=True, transform=transform)
+        testset = torchvision.datasets.ImageNet(root=cfg.DIR, train=False,
+                                           download=True, transform=transform)
+        
+    
     dataset = torch.utils.data.ConcatDataset([trainset, testset])
 
     # Define data loaders
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=cfg.TEST.BATCH_SIZE,
-                                              shuffle=True, num_workers=8)
+                                              shuffle=True, num_workers=4, pin_memory=True)
    
     for iteration in range(cfg.OPTIM.ITER):
         # Set learning rate for warm-up phase
@@ -113,7 +123,7 @@ def train(description, path):
 
     test_acc = 100.0 * correct / total
     avg_test_loss = test_loss / len(dataloader)
-    save_path = cfg.SAVE_PATH + cfg.CORRUPTION.DATASET + "_" + str(test_acc) + ".pth"
+    save_path = cfg.SAVE_PATH + cfg.CORRUPTION.DATASET + "_acc" + str(test_acc) + "_" + cfg.MODEL.ARCH +  ".pth"
     torch.save(best_model_weights, save_path)
    
     print(f"Final Loss: {avg_test_loss:.4f} - Final Acc: {test_acc:.2f}%")
@@ -122,5 +132,5 @@ def train(description, path):
 
 
 if __name__ == '__main__':
-    train('"Training.', '/home/uqzxwang/code/test-time-adaptation/classification/cfgs/cifar10_c/source.yaml')
+    train('"Training.', '/home/uqzxwang/code/test-time-adaptation/classification/cfgs/cifar100_c/source.yaml')
 
