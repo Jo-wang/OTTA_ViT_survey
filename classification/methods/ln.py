@@ -26,26 +26,26 @@ from torch import nn
 from torch.nn import functional as F
 
 
-class AlphaBatchNorm(nn.Module):
+class AlphaLayerNorm(nn.Module):
     """ Use the source statistics as a prior on the target statistics """
 
     @staticmethod
-    def find_bns(parent, alpha):
+    def find_lns(parent, alpha):
         replace_mods = []
         if parent is None:
             return []
         for name, child in parent.named_children():
-            if isinstance(child, nn.BatchNorm2d):
-                module = AlphaBatchNorm(child, alpha)
+            if isinstance(child, nn.LayerNorm):
+                module = AlphaLayerNorm(child, alpha)
                 replace_mods.append((parent, name, module))
             else:
-                replace_mods.extend(AlphaBatchNorm.find_bns(child, alpha))
+                replace_mods.extend(AlphaLayerNorm.find_lns(child, alpha))
 
         return replace_mods
 
     @staticmethod
     def adapt_model(model, alpha):
-        replace_mods = AlphaBatchNorm.find_bns(model, alpha)
+        replace_mods = AlphaLayerNorm.find_lns(model, alpha)
         print(f"| Found {len(replace_mods)} modules to be replaced.")
         for (parent, name, child) in replace_mods:
             setattr(parent, name, child)
@@ -59,7 +59,7 @@ class AlphaBatchNorm(nn.Module):
         self.layer.eval()
         self.alpha = alpha
 
-        self.norm = nn.BatchNorm2d(self.layer.num_features, affine=False, momentum=1.0)
+        self.norm = nn.LayerNorm(self.layer.num_features, elementwise_affine=False)
 
     def forward(self, input):
         self.norm(input)
@@ -79,10 +79,10 @@ class AlphaBatchNorm(nn.Module):
         )
 
 
-class EMABatchNorm(nn.Module):
+class EMALayerNorm(nn.Module):
     @staticmethod
     def adapt_model(model):
-        model = EMABatchNorm(model)
+        model = EMALayerNorm(model)
         return model
 
     def __init__(self, model):

@@ -1,16 +1,16 @@
 MODEL:
   ADAPTATION: source
-  ARCH: vit_base_patch16_224
+  ARCH: vit_large_patch16_224
 
 OPTIM:
-  ITER: 2000
-  WARMUP: 400
+  ITER: 8000
+  WARMUP: 1600
   METHOD: sgd
   LR: 0.03
 
 
 TEST:
-  BATCH_SIZE: 256
+  BATCH_SIZE: 64
 CORRUPTION:
   DATASET: cifar10
 

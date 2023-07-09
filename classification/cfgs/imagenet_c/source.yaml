@@ -1,25 +1,19 @@
-CORRUPTION:
-  DATASET: imagenet_c
-  SEVERITY:
-    - 5
-  TYPE:
-    - gaussian_noise
-    - shot_noise
-    - impulse_noise
-    - defocus_blur
-    - glass_blur
-    - motion_blur
-    - zoom_blur
-    - snow
-    - frost
-    - fog
-    - brightness
-    - contrast
-    - elastic_transform
-    - pixelate
-    - jpeg_compression
 MODEL:
   ADAPTATION: source
-  ARCH: resnet50
+  ARCH: vit_base_patch16_224.orig_in21k_ft_in1k
+
+OPTIM:
+  ITER: 16000
+  WARMUP: 4000
+  METHOD: sgd
+  LR: 0.03
+
+
 TEST:
   BATCH_SIZE: 64
+CORRUPTION:
+  DATASET: imagenet_c
+
+DIR: /home/uqzxwang/data/TTA/source_set/
+SAVE_PATH: /home/uqzxwang/checkpoint/TTA/source/
+  
