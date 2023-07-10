@@ -48,7 +48,7 @@ def get_torchvision_model(model_name, weight_version="IMAGENET1K_V1"):
     return model
 
 
-def get_timm_model(model_name):
+def get_timm_model(model_name, ckpt=None):
     """
     Restore a pre-trained model from timm: https://github.com/huggingface/pytorch-image-models/tree/main/timm
     Quickstart: https://huggingface.co/docs/timm/quickstart
@@ -61,7 +61,7 @@ def get_timm_model(model_name):
         raise ValueError(f"Model '{model_name}' is not available. Choose from: {available_models}")
 
     # setup pre-trained model
-    model = timm.create_model(model_name, pretrained=True)
+    model = timm.create_model(model_name, pretrained=True, checkpoint_path=ckpt)
     logger.info(f"Successfully restored the weights of '{model_name}' from timm.")
 
     # add the corresponding input normalization to the model
@@ -69,6 +69,11 @@ def get_timm_model(model_name):
         logger.info(f"General model information: {model.pretrained_cfg}")
         logger.info(f"Adding input normalization to the model using: mean={model.pretrained_cfg['mean']} \t std={model.pretrained_cfg['std']}")
         model = normalize_model(model, mean=model.pretrained_cfg["mean"], std=model.pretrained_cfg["std"])
+    # TODO: need to check if the input normalization is needed
+    elif hasattr(model, "default_cfg"):
+        logger.info(f"General model information: {model.default_cfg}")
+        logger.info(f"Adding input normalization to the model using: mean={model.default_cfg['mean']} \t std={model.default_cfg['std']}")
+        model = normalize_model(model, mean=model.default_cfg["mean"], std=model.default_cfg["std"])
     else:
         raise AttributeError(f"Attribute 'pretrained_cfg' is missing for model '{model_name}' from timm."
                              f" This prevents adding the correct input normalization to the model!")
@@ -264,7 +269,7 @@ class TransformerWrapper(torch.nn.Module):
         return x
 
 
-def get_model(cfg, num_classes):
+def get_model(cfg, num_classes, ckpt=None):
     if cfg.CORRUPTION.DATASET == "domainnet126":
         base_model = ResNetDomainNet126(arch=cfg.MODEL.ARCH, checkpoint_path=cfg.CKPT_PATH, num_classes=num_classes)
     else:
@@ -274,7 +279,7 @@ def get_model(cfg, num_classes):
         except ValueError:
             try:
                 # load model from timm
-                base_model = get_timm_model(cfg.MODEL.ARCH)
+                base_model = get_timm_model(cfg.MODEL.ARCH, ckpt)
             except ValueError:
                 try:
                     # load some custom models

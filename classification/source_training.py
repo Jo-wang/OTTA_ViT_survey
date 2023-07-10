@@ -11,7 +11,7 @@ from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
 
 from models.source_model import get_model
 
-from conf import cfg, load_cfg_fom_args
+from conf import cfg, load_cfg_from_args
 
 os.environ["CUDA_VISIBLE_DEVICES"] = '1'
 
@@ -23,7 +23,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def train(description, path):
 
-    load_cfg_fom_args(description, path)
+    load_cfg_from_args(description, path)
     
     # num_classes = get_num_classes(dataset_name=cfg.CORRUPTION.DATASET)
     model = get_model(cfg).to(device)

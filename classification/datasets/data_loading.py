@@ -42,18 +42,7 @@ def get_transform(dataset_name, adaptation):
             transform = get_augmentation_versions(aug_versions="iwss", aug_type="moco-v2", res_size=256, crop_size=224)
     else:
         # create non-method specific transformation
-        if dataset_name in {"cifar10", "cifar100"}:
-            transform = transforms.Compose([transforms.ToTensor()])
-        elif dataset_name in {"cifar10_c", "cifar100_c"}:
-            transform = None
-        elif dataset_name == "imagenet_c":
-            # note that ImageNet-C is already resized and centre cropped
-            transform = transforms.Compose([transforms.ToTensor()])
-        elif dataset_name in {"domainnet126"}:
-            transform = get_augmentation(aug_type="test", res_size=256, crop_size=224)
-        else:
-            # use classical ImageNet transformation procedure
-            transform = transforms.Compose([transforms.Resize(256),
+        transform = transforms.Compose([transforms.Resize(256),
                                             transforms.CenterCrop(224),
                                             transforms.ToTensor()])
 

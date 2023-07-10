@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#
 # ---
 # This licence notice applies to all originally written code by the
 # authors. Code taken from other open-source projects is indicated.
@@ -25,7 +24,6 @@ AlphaBatchNorm builds upon: https://github.com/bethgelab/robustness/blob/main/ro
 from torch import nn
 from torch.nn import functional as F
 
-
 class AlphaLayerNorm(nn.Module):
     """ Use the source statistics as a prior on the target statistics """
 
@@ -35,7 +33,7 @@ class AlphaLayerNorm(nn.Module):
         if parent is None:
             return []
         for name, child in parent.named_children():
-            if isinstance(child, nn.LayerNorm):
+            if isinstance(child, nn.LayerNorm):  # Replace nn.BatchNorm2d with nn.LayerNorm
                 module = AlphaLayerNorm(child, alpha)
                 replace_mods.append((parent, name, module))
             else:
@@ -67,7 +65,7 @@ class AlphaLayerNorm(nn.Module):
         running_mean = ((1 - self.alpha) * self.layer.running_mean + self.alpha * self.norm.running_mean)
         running_var = ((1 - self.alpha) * self.layer.running_var + self.alpha * self.norm.running_var)
 
-        return F.batch_norm(
+        return F.layer_norm(
             input,
             running_mean,
             running_var,

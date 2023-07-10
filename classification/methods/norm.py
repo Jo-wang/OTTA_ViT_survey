@@ -2,8 +2,10 @@ import torch
 import torch.nn as nn
 from copy import deepcopy
 from methods.base import TTAMethod
-from methods.bn import AlphaBatchNorm, EMABatchNorm
+from methods.ln import AlphaLayerNorm, EMALayerNorm
 
+
+# TODO: need to modify BN -> LN
 
 class Norm(TTAMethod):
     def __init__(self, cfg, model, num_classes):
@@ -32,6 +34,6 @@ class Norm(TTAMethod):
                     m.train()
         elif self.cfg.MODEL.ADAPTATION == "norm_alpha":  # BN--0.1
             # (1-alpha) * src_stats + alpha * test_stats
-            self.model = AlphaBatchNorm.adapt_model(self.model, alpha=self.cfg.BN.ALPHA).cuda()
+            self.model = AlphaLayerNorm.adapt_model(self.model, alpha=self.cfg.BN.ALPHA).cuda()
         elif self.cfg.MODEL.ADAPTATION == "norm_ema":  # BN--EMA
-            self.model = EMABatchNorm.adapt_model(self.model).cuda()
+            self.model = EMALayerNorm.adapt_model(self.model).cuda()

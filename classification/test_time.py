@@ -1,13 +1,15 @@
 import os
+import time
+import torch
 import logging
 import numpy as np
 
 from models.model import get_model
 from utils import get_accuracy, eval_domain_dict
 from datasets.data_loading import get_test_loader
-from conf import cfg, load_cfg_from_args, get_num_classes, get_domain_sequence, adaptation_method_lookup
+from conf import cfg, load_cfg_from_args, get_num_classes, adaptation_method_lookup
 
-from methods.tent import Tent
+from methods.tent import Tent 
 from methods.ttaug import TTAug
 from methods.memo import MEMO
 from methods.cotta import CoTTA
@@ -15,17 +17,18 @@ from methods.gtta import GTTA
 from methods.adacontrast import AdaContrast
 from methods.rmt import RMT
 from methods.eata import EATA
-from methods.norm import Norm
+# ! from methods.norm import Norm
 from methods.lame import LAME
 from methods.sar import SAR
 from methods.rotta import RoTTA
 from methods.roid import ROID
 
 logger = logging.getLogger(__name__)
+os.environ["CUDA_VISIBLE_DEVICES"] = '1'
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-
-def evaluate(description):
-    load_cfg_from_args(description)
+def evaluate(description, path):
+    load_cfg_from_args(description, path)
     valid_settings = ["reset_each_shift",           # reset the model state after the adaptation to a domain
                       "continual",                  # train on sequence of domain shifts without knowing when a shift occurs
                       "gradual",                    # sequence of gradually increasing / decreasing domain shifts
@@ -38,21 +41,20 @@ def evaluate(description):
     assert cfg.SETTING in valid_settings, f"The setting '{cfg.SETTING}' is not supported! Choose from: {valid_settings}"
 
     num_classes = get_num_classes(dataset_name=cfg.CORRUPTION.DATASET)
-    base_model = get_model(cfg, num_classes)
+    
+    if cfg.MODEL.CHECKPOINT != None:        
+        base_model = get_model(cfg, num_classes, ckpt=cfg.MODEL.CHECKPOINT)
+    else:
+        base_model = get_model(cfg, num_classes, ckpt=None)
+
+    base_model.to(device)
 
     # setup test-time adaptation method
     model = eval(f'{adaptation_method_lookup(cfg.MODEL.ADAPTATION)}')(cfg=cfg, model=base_model, num_classes=num_classes)
     logger.info(f"Successfully prepared test-time adaptation method: {cfg.MODEL.ADAPTATION.upper()}")
 
     # get the test sequence containing the corruptions or domain names
-    if cfg.CORRUPTION.DATASET in {"domainnet126"}:
-        # extract the domain sequence for a specific checkpoint.
-        dom_names_all = get_domain_sequence(ckpt_path=cfg.CKPT_PATH)
-    elif cfg.CORRUPTION.DATASET in {"imagenet_d", "imagenet_d109"} and not cfg.CORRUPTION.TYPE[0]:
-        # dom_names_all = ["clipart", "infograph", "painting", "quickdraw", "real", "sketch"]
-        dom_names_all = ["clipart", "infograph", "painting", "real", "sketch"]
-    else:
-        dom_names_all = cfg.CORRUPTION.TYPE
+    dom_names_all = cfg.CORRUPTION.TYPE
     logger.info(f"Using the following domain sequence: {dom_names_all}")
 
     # prevent iterating multiple times over the same data in the mixed_domains setting
@@ -69,6 +71,7 @@ def evaluate(description):
     errs_5 = []
     domain_dict = {}
 
+    start_time = time.time()
     # start evaluation
     for i_dom, domain_name in enumerate(dom_names_loop):
         if i_dom == 0 or "reset_each_shift" in cfg.SETTING:
@@ -106,6 +109,9 @@ def evaluate(description):
 
             logger.info(f"{cfg.CORRUPTION.DATASET} error % [{domain_name}{severity}][#samples={len(test_data_loader.dataset)}]: {err:.2%}")
 
+    end_time = time.time()
+    elapsed_time = end_time - start_time
+    logger.info(f"time spend: {elapsed_time}")
     if len(errs_5) > 0:
         logger.info(f"mean error: {np.mean(errs):.2%}, mean error at 5: {np.mean(errs_5):.2%}")
     else:
@@ -115,7 +121,12 @@ def evaluate(description):
         # print detailed results for each domain
         eval_domain_dict(domain_dict, domain_seq=dom_names_all)
 
+    import copy
+    best_model_weights = copy.deepcopy(model.state_dict())
+    save_path = cfg.SAVE_PATH + cfg.SETTING + "_BS" + str(cfg.TEST.BATCH_SIZE) + "_" + str(cfg.CORRUPTION.SEVERITY[0]) + "_" + cfg.CORRUPTION.DATASET + "_err" + str(np.mean(errs)*100) + "_" + cfg.MODEL.ARCH +  ".pth"
+    torch.save(best_model_weights, save_path)
+
 
 if __name__ == '__main__':
-    evaluate('"Evaluation.')
+    evaluate('"Evaluation.', '/home/uqzxwang/code/test-time-adaptation/classification/cfgs/cifar10_c/tent.yaml')
 
