@@ -38,7 +38,7 @@ This repository allows studying a wide range of datasets, models, settings, and 
   - Combinations like `gradual_correlated` or `reset_each_shift_correlated` are also possible.
  
 - **Batch Size**
-- 1, 16, 32, 64, 200
+  - 1, 16, 32, 64, 200
 
 - **Backbone**
   - ViT B-16 224
