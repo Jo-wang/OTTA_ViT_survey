@@ -7,7 +7,7 @@ import torch.nn as nn
 import torch.jit
 
 from methods.base import TTAMethod
-
+from gpu_mem_track import MemTracker
 
 class Tent(TTAMethod):
     """Tent adapts a model by entropy minimization during testing.
@@ -23,8 +23,14 @@ class Tent(TTAMethod):
         """
         imgs_test = x[0]
         outputs = self.model(imgs_test)
+        
+        # MemTracker.track('After forward - before backward')
+        
         loss = softmax_entropy(outputs).mean(0)
         loss.backward()
+        
+        # MemTracker.track('After backward')
+        
         self.optimizer.step()
         self.optimizer.zero_grad()
         return outputs

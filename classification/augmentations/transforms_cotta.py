@@ -131,7 +131,7 @@ class ColorJitterPro(ColorJitter):
 
 
 def get_tta_transforms(dataset, gaussian_std: float=0.005, soft=False, padding_mode='edge', cotta_augs=True):
-    img_shape = (32, 32, 3) if "cifar" in dataset else (224, 224, 3)
+    img_shape = (224, 224, 3)
     n_pixels = img_shape[0]
 
     tta_transforms = [

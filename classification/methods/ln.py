@@ -21,6 +21,7 @@
 AlphaBatchNorm builds upon: https://github.com/bethgelab/robustness/blob/main/robusta/batchnorm/bn.py
 """
 
+import torch
 from torch import nn
 from torch.nn import functional as F
 
@@ -33,7 +34,7 @@ class AlphaLayerNorm(nn.Module):
         if parent is None:
             return []
         for name, child in parent.named_children():
-            if isinstance(child, nn.LayerNorm):  # Replace nn.BatchNorm2d with nn.LayerNorm
+            if isinstance(child, LayerNormWithStoredStats):  # Replace nn.BatchNorm2d with nn.LayerNorm
                 module = AlphaLayerNorm(child, alpha)
                 replace_mods.append((parent, name, module))
             else:
@@ -57,13 +58,14 @@ class AlphaLayerNorm(nn.Module):
         self.layer.eval()
         self.alpha = alpha
 
-        self.norm = nn.LayerNorm(self.layer.num_features, elementwise_affine=False)
+        self.norm = LayerNormWithStoredStats(self.layer.num_features, elementwise_affine=False)
 
     def forward(self, input):
+        
         self.norm(input)
 
-        running_mean = ((1 - self.alpha) * self.layer.running_mean + self.alpha * self.norm.running_mean)
-        running_var = ((1 - self.alpha) * self.layer.running_var + self.alpha * self.norm.running_var)
+        running_mean = ((1 - self.alpha) * self.layer.stored_means + self.alpha * self.norm.mean)
+        running_var = ((1 - self.alpha) * self.layer.var + self.alpha * self.norm.var)
 
         return F.layer_norm(
             input,
@@ -77,20 +79,39 @@ class AlphaLayerNorm(nn.Module):
         )
 
 
-class EMALayerNorm(nn.Module):
-    @staticmethod
-    def adapt_model(model):
-        model = EMALayerNorm(model)
-        return model
+    
+ 
+class LayerNormWithStoredStats(nn.LayerNorm):
+    def __init__(self, normalized_shape, eps=1e-5, elementwise_affine=True):
+        super(LayerNormWithStoredStats, self).__init__(normalized_shape, eps, elementwise_affine)
+        
+        # Initialize lists to store mean and variance statistics
+        self.stored_means = []
+        self.stored_vars = []
 
-    def __init__(self, model):
-        super().__init__()
-        self.model = model
+    def forward(self, input):
+        # Compute mean and variance for the current input
+        mean = input.mean(-1, keepdim=True)
+        var = input.var(-1, keepdim=True, unbiased=False)
+        
+        # Store the computed statistics
+        self.stored_means.append(mean)
+        self.stored_vars.append(var)
+        
+        # Call the original LayerNorm forward method
+        return super(LayerNormWithStoredStats, self).forward(input)
 
-    def forward(self, x):
-        # store statistics, but discard result
-        self.model.train()
-        self.model(x)
-        # store statistics, use the stored stats
-        self.model.eval()
-        return self.model(x)
+# # Example usage
+# layer_norm = LayerNormWithStoredStats(512)
+# input_tensor = torch.randn(10, 512)  # Example tensor with 10 samples, each with 512 features
+# output = layer_norm(input_tensor)
+
+# # Get the stored statistics
+# stored_means = layer_norm.stored_means[-1]
+# stored_vars = layer_norm.stored_vars[-1]
+
+# stored_means, stored_vars
+   
+
+
+

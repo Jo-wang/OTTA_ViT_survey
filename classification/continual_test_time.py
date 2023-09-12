@@ -25,6 +25,8 @@ from methods.sar import SAR
 from methods.rotta import RoTTA
 from methods.roid import ROID
 
+import wandb
+
 logger = logging.getLogger(__name__)
 os.environ["CUDA_VISIBLE_DEVICES"] = '0'
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -44,8 +46,16 @@ def read_order(f):
             
         
 def evaluate(description, path, orders):
+    name = "TTA_bs1_CoTTA_ParaReset_UpdateLN_vitb16_L5_continual_10order"
+    
     load_cfg_from_args(description, path)
     valid_settings = ["continual"]
+    
+    check = False
+    if check:
+        wandb.init(project="continual-test-time-adaptation", name=name, config=cfg, mode="disabled")
+    else:
+        wandb.init(project="continual-test-time-adaptation", name=name, config=cfg)
     assert cfg.SETTING in valid_settings, f"The setting '{cfg.SETTING}' is not supported! Choose from: {valid_settings}"
 
     num_classes = get_num_classes(dataset_name=cfg.CORRUPTION.DATASET)
@@ -71,7 +81,6 @@ def evaluate(description, path, orders):
         errs = []
         domain_dict = {}
 
-        start_time = time.time()
         # start evaluation
         for i_dom, domain_name in enumerate(dom_names_all):
             logger.warning("not resetting model")
@@ -91,19 +100,17 @@ def evaluate(description, path, orders):
                                                    shuffle=False,
                                                    workers=min(cfg.TEST.NUM_WORKERS, os.cpu_count()))
 
-                acc, domain_dict = get_accuracy(
+                acc, domain_dict, flops, params, elipsed_time = get_accuracy(
                     model, data_loader=test_data_loader, dataset_name=cfg.CORRUPTION.DATASET,
                     domain_name=domain_name, setting=cfg.SETTING, domain_dict=domain_dict)
 
                 err = 1. - acc
                 errs.append(err)
                 logger.info(f"Type {i}: {cfg.CORRUPTION.DATASET} error % [{domain_name}{severity}][#samples={len(test_data_loader.dataset)}]: {err:.2%}")
-
-        end_time = time.time()
-        elapsed_time = end_time - start_time
-        logger.info(f"time spend: {elapsed_time}")
+                wandb.log({f"{cfg.CORRUPTION.DATASET} error % [{domain_name}{severity}][#samples={len(test_data_loader.dataset)}]": err})
         logger.info(f"mean error: {np.mean(errs):.2%}")
-
+        wandb.log({f"mean error": np.mean(errs)}, step=i)
+        
         best_model_weights = copy.deepcopy(model.state_dict())
         save_path = cfg.SAVE_PATH + "TYPE_" + str(i+1) + "_" + cfg.SETTING + "_BS" + str(cfg.TEST.BATCH_SIZE) + "_" + str(cfg.CORRUPTION.SEVERITY[0]) + "_" + cfg.CORRUPTION.DATASET + "_err" + str(np.mean(errs)*100) + "_" + cfg.MODEL.ARCH +  ".pth"
         torch.save(best_model_weights, save_path)
@@ -112,6 +119,6 @@ def evaluate(description, path, orders):
 
 
 if __name__ == '__main__':
-    orders = read_order('/home/uqzxwang/code/test-time-adaptation/classification/cfgs/cifar10_c/10orders/tent0.yaml')
-    evaluate('Evaluation.', '/home/uqzxwang/code/test-time-adaptation/classification/cfgs/cifar10_c/10orders/tent0.yaml', orders)
+    orders = read_order('/home/uqzxwang/code/test-time-adaptation/classification/cfgs/cifar10_c/10orders/cotta0.yaml')
+    evaluate('Evaluation.', '/home/uqzxwang/code/test-time-adaptation/classification/cfgs/cifar10_c/10orders/cotta0.yaml', orders)
 

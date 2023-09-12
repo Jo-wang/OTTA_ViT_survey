@@ -22,7 +22,10 @@ class TTAMethod(nn.Module):
         assert self.steps > 0, "requires >= 1 step(s) to forward and update"
 
         # configure model and optimizer
-        self.configure_model()
+        if cfg.MODEL.ADAPTATION == 'cotta':
+            self.configure_model(train_all=cfg.COTTA.TRAIN_ALL)
+        else:
+            self.configure_model()
         self.params, param_names = self.collect_params()
         self.optimizer = self.setup_optimizer() if len(self.params) > 0 else None
         self.print_amount_trainable_params()
@@ -37,6 +40,7 @@ class TTAMethod(nn.Module):
         # note: if the self.model is never reset, like for continual adaptation,
         # then skipping the state copy would save memory
         self.models = [self.model]
+        
         self.model_states, self.optimizer_state = self.copy_model_and_optimizer()
 
     def forward(self, x):
@@ -45,42 +49,44 @@ class TTAMethod(nn.Module):
 
         x = x if isinstance(x, list) else [x]
 
-        if x[0].shape[0] == 1:  # single sample test-time adaptation
-            # create the sliding window input
-            if self.input_buffer is None:
-                self.input_buffer = [x_item for x_item in x]
-                # set bn1d layers into eval mode, since no statistics can be extracted from 1 sample
-                self.change_mode_of_batchnorm1d(self.models, to_train_mode=False)
-            elif self.input_buffer[0].shape[0] < self.window_length:
-                self.input_buffer = [torch.cat([self.input_buffer[i], x_item], dim=0) for i, x_item in enumerate(x)]
-                # set bn1d layers into train mode
-                self.change_mode_of_batchnorm1d(self.models, to_train_mode=True)
-            else:
-                for i, x_item in enumerate(x):
-                    self.input_buffer[i][self.pointer] = x_item
+        # NOTE NO sliding window needed as ViT using LayerNorm instead of BatchNorm
+        
+        # if x[0].shape[0] == 1:  # single sample test-time adaptation
+        #     # create the sliding window input
+        #     if self.input_buffer is None:
+        #         self.input_buffer = [x_item for x_item in x]
+        #         # set bn1d layers into eval mode, since no statistics can be extracted from 1 sample
+        #         self.change_mode_of_batchnorm1d(self.models, to_train_mode=False)
+        #     elif self.input_buffer[0].shape[0] < self.window_length:
+        #         self.input_buffer = [torch.cat([self.input_buffer[i], x_item], dim=0) for i, x_item in enumerate(x)]
+        #         # set bn1d layers into train mode
+        #         self.change_mode_of_batchnorm1d(self.models, to_train_mode=True)
+        #     else:
+        #         for i, x_item in enumerate(x):
+        #             self.input_buffer[i][self.pointer] = x_item
 
-            if self.pointer == (self.window_length - 1):
-                # update the model, since the complete buffer has changed
-                for _ in range(self.steps):
-                    outputs = self.forward_and_adapt(self.input_buffer)
-                outputs = outputs[self.pointer.long()]
-            else:
-                # create the prediction without updating the model
-                if self.has_bn:
-                    # forward the whole buffer to get good batchnorm statistics
-                    outputs = self.forward_sliding_window(self.input_buffer)
-                    outputs = outputs[self.pointer.long()]
-                else:
-                    # only forward the current test sample, since there are no batchnorm layers
-                    outputs = self.forward_sliding_window(x)
+        #     if self.pointer == (self.window_length - 1):
+        #         # update the model, since the complete buffer has changed
+        #         for _ in range(self.steps):
+        #             outputs = self.forward_and_adapt(self.input_buffer)
+        #         outputs = outputs[self.pointer.long()]
+        #     else:
+        #         # create the prediction without updating the model
+        #         if self.has_bn:
+        #             # forward the whole buffer to get good batchnorm statistics
+        #             outputs = self.forward_sliding_window(self.input_buffer)
+        #             outputs = outputs[self.pointer.long()]
+        #         else:
+        #             # only forward the current test sample, since there are no batchnorm layers
+        #             outputs = self.forward_sliding_window(x)
 
-            # increase the pointer
-            self.pointer += 1
-            self.pointer %= self.window_length
+        #     # increase the pointer
+        #     self.pointer += 1
+        #     self.pointer %= self.window_length
 
-        else:   # common batch adaptation setting
-            for _ in range(self.steps):
-                outputs = self.forward_and_adapt(x)
+        # else:   # common batch adaptation setting
+        for _ in range(self.steps):
+            outputs = self.forward_and_adapt(x)
 
         return outputs
 
@@ -153,7 +159,7 @@ class TTAMethod(nn.Module):
     def load_model_and_optimizer(self):
         """Restore the model and optimizer states from copies."""
         for model, model_state in zip(self.models, self.model_states):
-            model.load_state_dict(model_state, strict=True)
+            model.load_state_dict(model_state, strict=False)
         self.optimizer.load_state_dict(self.optimizer_state)
 
     @staticmethod

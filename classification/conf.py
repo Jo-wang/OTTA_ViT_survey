@@ -83,10 +83,10 @@ _C.CORRUPTION = CfgNode()
 # _C.CORRUPTION.DATASET = 'cifar10'
 
 # Check https://github.com/hendrycks/robustness for corruption details
-_C.CORRUPTION.TYPE = ['gaussian_noise', 'shot_noise', 'impulse_noise',
-                      'defocus_blur', 'glass_blur', 'motion_blur', 'zoom_blur',
-                      'snow', 'frost', 'fog', 'brightness', 'contrast',
-                      'elastic_transform', 'pixelate', 'jpeg_compression']
+#NOTE _C.CORRUPTION.TYPE = ['gaussian_noise', 'shot_noise', 'impulse_noise',
+#                       'defocus_blur', 'glass_blur', 'motion_blur', 'zoom_blur',
+#                       'snow', 'frost', 'fog', 'brightness', 'contrast',
+#                       'elastic_transform', 'pixelate', 'jpeg_compression']
 _C.CORRUPTION.SEVERITY = [5, 4, 3, 2, 1]
 
 # Number of examples to evaluate. If num_ex is changed, each sequence is subsampled to the specified amount
@@ -150,11 +150,6 @@ _C.CONTRAST.MODE = 'all'
 # --------------------------------- CoTTA options --------------------------- #
 _C.COTTA = CfgNode()
 
-# Restore probability
-_C.COTTA.RST = 0.01
-
-# Average probability for TTA
-_C.COTTA.AP = 0.92
 
 # --------------------------------- GTTA options ---------------------------- #
 _C.GTTA = CfgNode()
@@ -251,7 +246,7 @@ _C.TEST.NUM_WORKERS = 4
 # Batch size for evaluation (and updates for norm + tent)
 _C.TEST.BATCH_SIZE = 128
 
-# If the batch size is 1, a sliding window approach can be applied by setting window length > 1
+# If the batch size is 1, a sliding window approach can be applied by setting window length > 1, if no sliding window based method, set window length to 0
 _C.TEST.WINDOW_LENGTH = 1
 
 # Number of augmentations for methods relying on TTA (test time augmentation)
@@ -414,7 +409,8 @@ def adaptation_method_lookup(adaptation):
                     "rotta": "RoTTA",
                     "gtta": "GTTA",
                     "rmt": "RMT",
-                    "roid": "ROID"
+                    "roid": "ROID",
+                    "so": "SO"   # eval source model on corrupted dataset
                     }
     assert adaptation in lookup_table.keys(), \
         f"Adaptation method '{adaptation}' is not supported! Choose from: {list(lookup_table.keys())}"

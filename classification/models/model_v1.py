@@ -3,49 +3,15 @@ import logging
 import timm
 import torch
 import torch.nn as nn
-import torchvision.models as models
 
 from robustbench.model_zoo.architectures.utils_architectures import normalize_model, ImageNormalizer
-from robustbench.model_zoo.enums import ThreatModel
-from robustbench.utils import load_model
+
 
 from copy import deepcopy
-from models import resnet26
+
 from datasets.imagenet_subsets import IMAGENET_A_MASK, IMAGENET_R_MASK, IMAGENET_D109_MASK
 
 logger = logging.getLogger(__name__)
-
-
-def get_torchvision_model(model_name, weight_version="IMAGENET1K_V1"):
-    """
-    Further details can be found here: https://pytorch.org/vision/0.14/models.html
-    :param model_name: name of the model to create and initialize with pre-trained weights
-    :param weight_version: name of the pre-trained weights to restore
-    :return: pre-trained model
-    """
-    # create a dictionary that maps the model name to the corresponding weight function
-    name_to_weights = {name[:-8].lower(): name for name in dir(models) if "Weights" in name}
-    if not model_name in name_to_weights.keys():
-        raise ValueError(f"Model name '{model_name}' is not supported. Choose from: {name_to_weights.keys()}")
-
-    # get the weight function and check if the specified type of weights is available
-    model_weights = getattr(models, name_to_weights[model_name])
-    available_weight_versions = [version for version in dir(model_weights) if "IMAGENET1K" in version]
-    if not weight_version in available_weight_versions:
-        raise ValueError(f"Weight type '{weight_version}' is not supported. Choose from: {available_weight_versions}")
-
-    # restore the specified weights
-    model_weights = getattr(model_weights, weight_version)
-
-    # setup the specified model and initialize it with the pre-trained weights
-    model = getattr(models, model_name)
-    model = model(weights=model_weights)
-
-    # get the transformation and add the input normalization to the model
-    transform = model_weights.transforms()
-    model = normalize_model(model, transform.mean, transform.std)
-    logger.info(f"Successfully restored '{weight_version}' pre-trained weights for model '{model_name}' from torchvision!")
-    return model
 
 
 def get_timm_model(model_name, ckpt=None):
@@ -80,109 +46,6 @@ def get_timm_model(model_name, ckpt=None):
 
     return model
 
-
-class ResNetDomainNet126(torch.nn.Module):
-    """
-    Architecture used for DomainNet-126
-    """
-    def __init__(self, arch="resnet50", checkpoint_path=None, num_classes=126, bottleneck_dim=256):
-        super().__init__()
-
-        self.arch = arch
-        self.bottleneck_dim = bottleneck_dim
-        self.weight_norm_dim = 0
-
-        # 1) ResNet backbone (up to penultimate layer)
-        if not self.use_bottleneck:
-            model = models.__dict__[self.arch](pretrained=True)
-            modules = list(model.children())[:-1]
-            self.encoder = torch.nn.Sequential(*modules)
-            self._output_dim = model.fc.in_features
-        # 2) ResNet backbone + bottlenck (last fc as bottleneck)
-        else:
-            model = models.__dict__[self.arch](pretrained=True)
-            model.fc = torch.nn.Linear(model.fc.in_features, self.bottleneck_dim)
-            bn = torch.nn.BatchNorm1d(self.bottleneck_dim)
-            self.encoder = torch.nn.Sequential(model, bn)
-            self._output_dim = self.bottleneck_dim
-
-        self.fc = torch.nn.Linear(self.output_dim, num_classes)
-
-        if self.use_weight_norm:
-            self.fc = torch.nn.utils.weight_norm(self.fc, dim=self.weight_norm_dim)
-
-        if checkpoint_path:
-            self.load_from_checkpoint(checkpoint_path)
-        else:
-            logger.warning(f"No checkpoint path was specified. Continue with ImageNet pre-trained weights!")
-
-        # add input normalization to the model
-        self.encoder = nn.Sequential(ImageNormalizer((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)), self.encoder)
-
-    def forward(self, x, return_feats=False):
-        # 1) encoder feature
-        feat = self.encoder(x)
-        feat = torch.flatten(feat, 1)
-
-        logits = self.fc(feat)
-
-        if return_feats:
-            return feat, logits
-        return logits
-
-    def load_from_checkpoint(self, checkpoint_path):
-        checkpoint = torch.load(checkpoint_path, map_location="cpu")
-        state_dict = dict()
-        model_state_dict = checkpoint["state_dict"] if "state_dict" in checkpoint.keys() else checkpoint["model"]
-        for name, param in model_state_dict.items():
-            # get rid of 'module.' prefix brought by DDP
-            name = name.replace("module.", "")
-            state_dict[name] = param
-        msg = self.load_state_dict(state_dict, strict=False)
-        logging.info(
-            f"Loaded from {checkpoint_path}; missing params: {msg.missing_keys}"
-        )
-
-    def get_params(self):
-        """
-        Backbone parameters use 1x lr; extra parameters use 10x lr.
-        """
-        backbone_params = []
-        extra_params = []
-        # case 1)
-        if not self.use_bottleneck:
-            backbone_params.extend(self.encoder.parameters())
-        # case 2)
-        else:
-            resnet = self.encoder[1][0]
-            for module in list(resnet.children())[:-1]:
-                backbone_params.extend(module.parameters())
-            # bottleneck fc + (bn) + classifier fc
-            extra_params.extend(resnet.fc.parameters())
-            extra_params.extend(self.encoder[1][1].parameters())
-            extra_params.extend(self.fc.parameters())
-
-        # exclude frozen params
-        backbone_params = [param for param in backbone_params if param.requires_grad]
-        extra_params = [param for param in extra_params if param.requires_grad]
-
-        return backbone_params, extra_params
-
-    @property
-    def num_classes(self):
-        return self.fc.weight.shape[0]
-
-    @property
-    def output_dim(self):
-        return self._output_dim
-
-    @property
-    def use_bottleneck(self):
-        return self.bottleneck_dim > 0
-
-    @property
-    def use_weight_norm(self):
-        return self.weight_norm_dim >= 0
 
 
 class BaseModel(torch.nn.Module):
@@ -270,38 +133,21 @@ class TransformerWrapper(torch.nn.Module):
 
 
 def get_model(cfg, num_classes, ckpt=None):
-    if cfg.CORRUPTION.DATASET == "domainnet126":
-        base_model = ResNetDomainNet126(arch=cfg.MODEL.ARCH, checkpoint_path=cfg.CKPT_PATH, num_classes=num_classes)
-    else:
-        try:
-            # load model from torchvision
-            base_model = get_torchvision_model(cfg.MODEL.ARCH, weight_version=cfg.MODEL.WEIGHTS)
-        except ValueError:
-            try:
-                # load model from timm
-                base_model = get_timm_model(cfg.MODEL.ARCH, ckpt)
-            except ValueError:
-                try:
-                    # load some custom models
-                    if cfg.MODEL.ARCH == "resnet26_gn":
-                        base_model = resnet26.build_resnet26()
-                        checkpoint = torch.load(cfg.CKPT_PATH, map_location="cpu")
-                        base_model.load_state_dict(checkpoint['net'])
-                        base_model = normalize_model(base_model, resnet26.MEAN, resnet26.STD)
-                    else:
-                        raise ValueError(f"Model {cfg.MODEL.ARCH} is not supported!")
-                    logger.info(f"Successfully restored model '{cfg.MODEL.ARCH}' from: {cfg.CKPT_PATH}")
-                except ValueError:
-                    # load model from robustbench
-                    dataset_name = cfg.CORRUPTION.DATASET.split("_")[0]
-                    base_model = load_model(cfg.MODEL.ARCH, cfg.CKPT_DIR, dataset_name, ThreatModel.corruptions)
+    
+    try:
+        # load model from timm
+        base_model = get_timm_model(cfg.MODEL.ARCH, ckpt)
+        logger.info(f"Successfully restored model '{cfg.MODEL.ARCH}' from: {cfg.CKPT_PATH}")
+        
+    except:
+        raise ValueError(f"Model {cfg.MODEL.ARCH} is not supported!")
 
-        if cfg.CORRUPTION.DATASET == "imagenet_a":
-            base_model = ImageNetXWrapper(base_model, IMAGENET_A_MASK)
-        elif cfg.CORRUPTION.DATASET == "imagenet_r":
-            base_model = ImageNetXWrapper(base_model, IMAGENET_R_MASK)
-        elif cfg.CORRUPTION.DATASET == "imagenet_d109":
-            base_model = ImageNetXWrapper(base_model, IMAGENET_D109_MASK)
+    if cfg.CORRUPTION.DATASET == "imagenet_a":
+        base_model = ImageNetXWrapper(base_model, IMAGENET_A_MASK)
+    elif cfg.CORRUPTION.DATASET == "imagenet_r":
+        base_model = ImageNetXWrapper(base_model, IMAGENET_R_MASK)
+    elif cfg.CORRUPTION.DATASET == "imagenet_d109":
+        base_model = ImageNetXWrapper(base_model, IMAGENET_D109_MASK)
 
     return base_model
 

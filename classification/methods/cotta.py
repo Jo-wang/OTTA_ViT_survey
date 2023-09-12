@@ -25,6 +25,7 @@ class CoTTA(TTAMethod):
         self.rst = cfg.COTTA.RST
         self.ap = cfg.COTTA.AP
         self.n_augmentations = cfg.TEST.N_AUGMENTATIONS
+        self.train_all = cfg.COTTA.TRAIN_ALL
 
         # Setup EMA and anchor/source model
         self.model_ema = self.copy_model(self.model)
@@ -81,6 +82,7 @@ class CoTTA(TTAMethod):
                         mask = (torch.rand(p.shape) < self.rst).float().cuda()
                         with torch.no_grad():
                             p.data = self.model_states[0][f"{nm}.{npp}"] * mask + p * (1.-mask)
+        # NOTE: CoTTA output the prediction result from teacher model (output_ema) by default
         return outputs_ema
 
     @torch.no_grad()
@@ -93,25 +95,21 @@ class CoTTA(TTAMethod):
         imgs_test = x[0]
         return self.model_ema(imgs_test)
 
-    def configure_model(self):
+    def configure_model(self, train_all):
         """Configure model."""
         # self.model.train()
-        self.model.eval()  # eval mode to avoid stochastic depth in swin. test-time normalization is still applied
-        # disable grad, to (re-)enable only what we update
-        self.model.requires_grad_(False)
-        # enable all trainable
-        for m in self.model.modules():
-            if isinstance(m, nn.BatchNorm2d):
-                m.requires_grad_(True)
-                # force use of batch stats in train and eval modes
-                m.track_running_stats = False
-                m.running_mean = None
-                m.running_var = None
-            elif isinstance(m, nn.BatchNorm1d):
-                m.train()   # always forcing train mode in bn1d will cause problems for single sample tta
-                m.requires_grad_(True)
-            else:
-                m.requires_grad_(True)
+        if train_all:
+            self.model.train()
+        else:
+            # self.model.train()
+            self.model.eval()  # eval mode to avoid stochastic depth in swin. test-time normalization is still applied
+            # disable grad, to (re-)enable only what we update
+            self.model.requires_grad_(False)
+            # enable all trainable
+            for m in self.model.modules():
+                if isinstance(m, nn.LayerNorm):
+                    m.train()
+                    m.requires_grad_(True)
 
 
 @torch.jit.script

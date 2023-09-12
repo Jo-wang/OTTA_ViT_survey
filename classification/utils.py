@@ -1,6 +1,12 @@
 import torch
+import wandb
 import logging
+import sys
+import time
+import random
 import numpy as np
+from thop import profile
+from gpu_mem_track import MemTracker
 from datasets.imagenet_subsets import IMAGENET_D_MAPPING
 
 
@@ -65,9 +71,23 @@ def get_accuracy(model: torch.nn.Module,
 
     correct = 0.
     with torch.no_grad():
+        index = random.randint(0, len(data_loader) - 1)
+        start_time = time.time()
         for i, data in enumerate(data_loader):
             imgs, labels = data[0], data[1]
-            output = model([img.to(device) for img in imgs]) if isinstance(imgs, list) else model(imgs.to(device))
+            
+            if isinstance(imgs, list):
+                imgs_device = [img.to(device) for img in imgs]
+            else:
+                imgs_device = imgs.to(device)
+            
+            # calculate the FLOPs of the model
+            if i == index:
+                flops, params = profile(model=model, inputs=[imgs_device,])
+            # Track gpu memory usage before adaptation
+            # MemTracker.track('Before forward')
+
+            output = model(imgs_device)
             predictions = output.argmax(1)
 
             if dataset_name == "imagenet_d" and domain_name != "none":
@@ -78,6 +98,11 @@ def get_accuracy(model: torch.nn.Module,
 
             if "mixed_domains" in setting and len(data) >= 3:
                 domain_dict = split_results_by_domain(domain_dict, data, predictions)
-
+                
+            # mem_dict = print_mem_info()
+            
+            # wandb.summary.update(mem_dict)
+        end_time = time.time()
+        time_elipsed = end_time - start_time
     accuracy = correct.item() / len(data_loader.dataset)
-    return accuracy, domain_dict
+    return accuracy, domain_dict, flops, params, time_elipsed
