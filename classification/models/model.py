@@ -48,7 +48,7 @@ def get_torchvision_model(model_name, weight_version="IMAGENET1K_V1"):
     return model
 
 
-def get_timm_model(model_name, ckpt=None):
+def get_timm_model(model_name, ckpt=None, num_classes=10):
     """
     Restore a pre-trained model from timm: https://github.com/huggingface/pytorch-image-models/tree/main/timm
     Quickstart: https://huggingface.co/docs/timm/quickstart
@@ -61,8 +61,9 @@ def get_timm_model(model_name, ckpt=None):
         raise ValueError(f"Model '{model_name}' is not available. Choose from: {available_models}")
 
     # setup pre-trained model
-    model = timm.create_model(model_name, pretrained=True, checkpoint_path=ckpt)
+    model = timm.create_model(model_name, pretrained=False, checkpoint_path=ckpt, num_classes=num_classes)
     logger.info(f"Successfully restored the weights of '{model_name}' from timm.")
+    logger.info(f"Num of classes is '{num_classes}' from timm.")
 
     # add the corresponding input normalization to the model
     if hasattr(model, "pretrained_cfg"):
@@ -279,7 +280,7 @@ def get_model(cfg, num_classes, ckpt=None):
         except ValueError:
             try:
                 # load model from timm
-                base_model = get_timm_model(cfg.MODEL.ARCH, ckpt)
+                base_model = get_timm_model(cfg.MODEL.ARCH, ckpt, num_classes=num_classes)
             except ValueError:
                 try:
                     # load some custom models

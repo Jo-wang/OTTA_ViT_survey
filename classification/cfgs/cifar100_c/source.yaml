@@ -13,7 +13,9 @@ TEST:
   BATCH_SIZE: 64
 CORRUPTION:
   DATASET: cifar100
+  CLS: 100
 
 DIR: /home/uqzxwang/data/TTA/source_set/
-SAVE_PATH: /home/uqzxwang/checkpoint/TTA/source/
+SAVE_PATH: /home/uqzxwang/checkpoint/TTA/source/10cls/
+  
   

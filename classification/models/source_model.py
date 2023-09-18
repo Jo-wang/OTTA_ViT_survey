@@ -9,7 +9,7 @@ from robustbench.model_zoo.architectures.utils_architectures import normalize_mo
 logger = logging.getLogger(__name__)
 
 
-def get_timm_model(model_name):
+def get_timm_model(model_name, cls):
     """
     Restore a pre-trained model from timm: https://github.com/huggingface/pytorch-image-models/tree/main/timm
     Quickstart: https://huggingface.co/docs/timm/quickstart
@@ -22,7 +22,7 @@ def get_timm_model(model_name):
         raise ValueError(f"Model '{model_name}' is not available. Choose from: {available_models}")
 
     # setup pre-trained model
-    model = timm.create_model(model_name, pretrained=True)
+    model = timm.create_model(model_name, pretrained=True, num_classes=cls)
     logger.info(f"Successfully restored the weights of '{model_name}' from timm.")
 
     # add the corresponding input normalization to the model
@@ -107,7 +107,7 @@ class TransformerWrapper(torch.nn.Module):
 
 def get_model(cfg):
 # load model from timm
-    base_model = get_timm_model(cfg.MODEL.ARCH)
+    base_model = get_timm_model(cfg.MODEL.ARCH, cfg.CORRUPTION.CLS)
 
     return base_model.cuda()
 

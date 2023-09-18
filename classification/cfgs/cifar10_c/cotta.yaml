@@ -1,8 +1,14 @@
 MODEL:
   ADAPTATION: cotta
-  ARCH: Standard
+  ARCH: vit_base_patch16_224
+  CHECKPOINT: /home/uqzxwang/checkpoint/TTA/source/modified_cifar10_acc99.553_vit_base_patch16_224.pth
+
+
 TEST:
-  BATCH_SIZE: 200
+  BATCH_SIZE: 1
+
+SETTING: reset_each_shift
+
 CORRUPTION:
   DATASET: cifar10_c
   SEVERITY:
@@ -31,6 +37,12 @@ OPTIM:
   WD: 0.
 M_TEACHER:
   MOMENTUM: 0.999
+
 COTTA:
-  RST: 0.01
+  RST: 0.0 # 0.01
   AP: 0.92
+  # teacher-student with EMA, and only update LN in student if TRAIN_ALL is False
+  TRAIN_ALL: True
+
+SAVE_PATH: /home/uqzxwang/checkpoint/TTA/cotta/
+DATA_DIR: /home/uqzxwang/data/TTA/

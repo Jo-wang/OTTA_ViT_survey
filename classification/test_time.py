@@ -24,19 +24,21 @@ from methods.sar import SAR
 from methods.rotta import RoTTA
 from methods.roid import ROID
 from methods.source_only import SO
+from methods.conjugatePL import ConjugatePL
 
 from gpu_mem_track import MemTracker
 
 
 logger = logging.getLogger(__name__)
 
-os.environ["CUDA_VISIBLE_DEVICES"] = '0'
+os.environ["CUDA_VISIBLE_DEVICES"] = '1'
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def evaluate(description, path):
     # name = "cifar100c-vitb16_L5_eval"
-    name = "CIFAR100C_TTA_bs16_CoTTA_ParaReset_UpdateLN_vitb16_L5_episodic"
-    # name = "CIFAR10C_TTA_bs1_tent_vitb16_L5_episodic"
+    
+    # name = "CIFAR10C_TTA_bs1_CoTTA_NoParaReset_UpdateALL_vitb16_L5_episodic"
+    name = "CIFAR10C_TTA_bs16_ConjPL_Poly_vitb16_L5_episodic"
     
     # MemTracker.init_tracker(detail=False, path='mem_track/', verbose=False, device=1, filename=name + '.txt')
     
@@ -153,5 +155,5 @@ def evaluate(description, path):
 
 
 if __name__ == '__main__':
-    evaluate('"Evaluation.', '/home/uqzxwang/code/test-time-adaptation/classification/cfgs/cifar100_c/cotta.yaml')
+    evaluate('"Evaluation.', '/home/uqzxwang/code/test-time-adaptation/classification/cfgs/cifar10_c/conjPL.yaml')
 

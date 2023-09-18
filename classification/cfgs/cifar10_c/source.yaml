@@ -1,6 +1,6 @@
 MODEL:
   ADAPTATION: source
-  ARCH: vit_large_patch16_224
+  ARCH: vit_base_patch16_224
 
 OPTIM:
   ITER: 8000
@@ -8,12 +8,12 @@ OPTIM:
   METHOD: sgd
   LR: 0.03
 
-
 TEST:
   BATCH_SIZE: 64
 CORRUPTION:
   DATASET: cifar10
+  CLS: 10
 
 DIR: /home/uqzxwang/data/TTA/source_set/
-SAVE_PATH: /home/uqzxwang/checkpoint/TTA/source/
+SAVE_PATH: /home/uqzxwang/checkpoint/TTA/source/10cls/
   

@@ -1,7 +1,7 @@
 import torch
 
 # Load the checkpoint
-checkpoint = torch.load('/home/uqzxwang/checkpoint/TTA/source/cifar100_acc99.893_vit_large_patch16_224.pth')
+checkpoint = torch.load('/home/uqzxwang/checkpoint/TTA/source/10cls/cifar100_acc99.29_vit_base_patch16_224.pth')
 
 # Remove the "model." prefix from parameter names
 new_state_dict = {}
@@ -18,4 +18,4 @@ for key, value in checkpoint.items():
 checkpoint['state_dict'] = new_state_dict
 
 # Save the modified checkpoint
-torch.save(checkpoint, '/home/uqzxwang/checkpoint/TTA/source/modified_cifar100_acc99.893_vit_large_patch16_224.pth')
+torch.save(checkpoint, '/home/uqzxwang/checkpoint/TTA/source/modified_cifar100_acc99.29_vit_base_patch16_224.pth')

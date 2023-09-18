@@ -132,5 +132,5 @@ def train(description, path):
 
 
 if __name__ == '__main__':
-    train('"Training.', '/home/uqzxwang/code/test-time-adaptation/classification/cfgs/cifar100_c/source.yaml')
+    train('"Training.', '/home/uqzxwang/code/test-time-adaptation/classification/cfgs/cifar10_c/source.yaml')
 

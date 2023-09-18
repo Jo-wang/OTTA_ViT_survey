@@ -1,3 +1,13 @@
+MODEL:
+  ADAPTATION: cotta
+  ARCH: vit_base_patch16_224
+  CHECKPOINT: /home/uqzxwang/checkpoint/TTA/source/modified_cifar10_acc99.67_vit_base_patch16_224.pth
+
+TEST:
+  BATCH_SIZE: 16
+
+SETTING: reset_each_shift
+
 CORRUPTION:
   DATASET: imagenet_c
   SEVERITY:
@@ -18,19 +28,20 @@ CORRUPTION:
     - elastic_transform
     - pixelate
     - jpeg_compression
-MODEL:
-  ADAPTATION: cotta
-  ARCH: resnet50
 OPTIM:
-  METHOD: SGD
+  METHOD: Adam
   STEPS: 1
   BETA: 0.9
-  LR: 0.01
-  WD: 0.0
+  LR: 1e-3
+  WD: 0.
 M_TEACHER:
   MOMENTUM: 0.999
+
 COTTA:
-  RST: 0.001
-  AP: 0.1
-TEST:
-  BATCH_SIZE: 64
+  RST: 0.0   # 0.01
+  AP: 0.92
+  # teacher-student with EMA, and only update LN in student if TRAIN_ALL is False
+  TRAIN_ALL: False 
+
+SAVE_PATH: /home/uqzxwang/checkpoint/TTA/cotta/
+DATA_DIR: /home/uqzxwang/data/TTA/

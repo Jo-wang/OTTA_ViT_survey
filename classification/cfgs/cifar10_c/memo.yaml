@@ -1,11 +1,14 @@
 MODEL:
   ADAPTATION: memo
-  ARCH: Standard
-  EPISODIC: True
+  ARCH: vit_base_patch16_224
+  CHECKPOINT: /home/uqzxwang/checkpoint/TTA/source/modified_cifar10_acc99.553_vit_base_patch16_224.pth
+
 TEST:
   BATCH_SIZE: 1
-  WINDOW_LENGTH: 1
   N_AUGMENTATIONS: 32
+
+SETTING: reset_each_shift
+
 CORRUPTION:
   DATASET: cifar10_c
   SEVERITY:
@@ -27,8 +30,14 @@ CORRUPTION:
     - pixelate
     - jpeg_compression
 OPTIM:
-  METHOD: SGD
+  METHOD: Adam
   STEPS: 1
   BETA: 0.9
-  LR: 0.005
+  LR: 1e-3
   WD: 0.
+
+# M_TEACHER:
+#   MOMENTUM: 0.999
+
+SAVE_PATH: /home/uqzxwang/checkpoint/TTA/memo/
+DATA_DIR: /home/uqzxwang/data/TTA/

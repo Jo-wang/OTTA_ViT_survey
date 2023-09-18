@@ -64,7 +64,7 @@ class SAR(TTAMethod):
         # perform model recovery
         if self.ema is not None:
             if self.ema < self.reset_constant_em:
-                logger.info(f"ema < {self.reset_constant_em}, now reset the model")
+                # NOTE logger.info(f"ema < {self.reset_constant_em}, now reset the model")
                 self.reset()
 
         return outputs
@@ -128,11 +128,11 @@ class SAR(TTAMethod):
                 m.requires_grad_(True)
 
     def setup_optimizer(self):
-        if "vit_" in self.cfg.MODEL.ARCH or "swin_" in self.cfg.MODEL.ARCH:
-            logger.info("Overwriting learning rate for transformers, using a learning rate of 0.001.")
-            return SAM(self.params, torch.optim.SGD, lr=0.001, momentum=self.cfg.OPTIM.MOMENTUM)
-        else:
-            return SAM(self.params, torch.optim.SGD, lr=self.cfg.OPTIM.LR, momentum=self.cfg.OPTIM.MOMENTUM)
+        return SAM(self.params, torch.optim.Adam, lr=0.001, betas=(self.cfg.OPTIM.BETA, 0.999),
+                                    weight_decay=self.cfg.OPTIM.WD)
+        # return SAM(self.params, torch.optim.SGD, lr=0.001, momentum=self.cfg.OPTIM.MOMENTUM)
+        # else:
+        #     return SAM(self.params, torch.optim.SGD, lr=self.cfg.OPTIM.LR, momentum=self.cfg.OPTIM.MOMENTUM)
 
 
 @torch.jit.script

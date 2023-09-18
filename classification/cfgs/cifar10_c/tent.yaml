@@ -1,12 +1,11 @@
 MODEL:
   ADAPTATION: tent
-  ARCH: Standard
+  ARCH: vit_base_patch16_224
+  CHECKPOINT: /home/uqzxwang/checkpoint/TTA/source/modified_cifar10_acc99.553_vit_base_patch16_224.pth
 TEST:
-  BATCH_SIZE: 200
+  BATCH_SIZE: 16
 
 SETTING: reset_each_shift
-
-BACKBONE: vit_base_patch16_224
 
 CORRUPTION:
   DATASET: cifar10_c
@@ -28,6 +27,7 @@ CORRUPTION:
     - elastic_transform
     - pixelate
     - jpeg_compression
+
 OPTIM:
   METHOD: Adam
   STEPS: 1
@@ -35,3 +35,5 @@ OPTIM:
   LR: 1e-3
   WD: 0.
 
+SAVE_PATH: /home/uqzxwang/checkpoint/TTA/tent/
+DATA_DIR: /home/uqzxwang/data/TTA/

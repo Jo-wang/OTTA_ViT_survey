@@ -111,11 +111,15 @@ augmentations = [
 
 mean = [0.5, 0.5, 0.5]
 std = [0.5, 0.5, 0.5]
+
 preprocess = transforms.Compose([
-    transforms.ToTensor(),
+    transforms.Resize(256),
+    transforms.CenterCrop(224),    # NOTE make the size suitable for ViT input
+    transforms.ToTensor()
     # transforms.Normalize(mean, std)
 ])
+
 preaugment = transforms.Compose([
-    transforms.RandomCrop(32, padding=4),
-    transforms.RandomHorizontalFlip(),
+    # transforms.RandomCrop(32, padding=4),
+    transforms.RandomHorizontalFlip()
 ])

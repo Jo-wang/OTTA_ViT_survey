@@ -24,7 +24,7 @@ cfg = _C
 # ---------------------------------- Misc options --------------------------- #
 
 # Setting - see README.md for more information
-_C.SETTING = "continual"
+_C.SETTING = "reset_each_shift"
 
 # Data directory
 _C.DATA_DIR = "./data"
@@ -65,13 +65,13 @@ _C.MODEL = CfgNode()
 # Torchvision: https://pytorch.org/vision/0.14/models.html
 # timm: https://github.com/huggingface/pytorch-image-models/tree/v0.6.13
 # RobustBench: https://github.com/RobustBench/robustbench
-_C.MODEL.ARCH = 'Standard'
+# _C.MODEL.ARCH = 'Standard'
 
 # Type of pre-trained weights for torchvision models. See: https://pytorch.org/vision/0.14/models.html
 _C.MODEL.WEIGHTS = "IMAGENET1K_V1"
 
 # Inspect the cfgs directory to see all possibilities
-_C.MODEL.ADAPTATION = 'source'
+# _C.MODEL.ADAPTATION = 'source'
 
 # Reset the model before every new batch
 _C.MODEL.EPISODIC = False
@@ -410,7 +410,8 @@ def adaptation_method_lookup(adaptation):
                     "gtta": "GTTA",
                     "rmt": "RMT",
                     "roid": "ROID",
-                    "so": "SO"   # eval source model on corrupted dataset
+                    "so": "SO",   # eval source model on corrupted dataset
+                    "conjPL": "ConjugatePL"
                     }
     assert adaptation in lookup_table.keys(), \
         f"Adaptation method '{adaptation}' is not supported! Choose from: {list(lookup_table.keys())}"

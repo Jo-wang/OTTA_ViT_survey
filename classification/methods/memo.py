@@ -26,7 +26,6 @@ class MEMO(TTAMethod):
     def __init__(self, cfg, model, num_classes):
         super().__init__(cfg, model, num_classes)
 
-        self.alpha_bn = cfg.BN.ALPHA
         self.n_augmentations = cfg.TEST.N_AUGMENTATIONS
         self.augmentations = aug_cifar if "cifar" in self.dataset_name else aug_imagenet
 
@@ -50,10 +49,11 @@ class MEMO(TTAMethod):
         loss, _ = marginal_entropy(outputs)
         loss.backward()
         self.optimizer.step()
+        
         return outputs
 
     def configure_model(self):
-        self.model = AlphaBatchNorm.adapt_model(self.model, alpha=self.alpha_bn)
+        self.model.train()
 
 
 def marginal_entropy(outputs):
