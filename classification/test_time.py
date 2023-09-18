@@ -38,7 +38,7 @@ def evaluate(description, path):
     # name = "cifar100c-vitb16_L5_eval"
     
     # name = "CIFAR10C_TTA_bs1_CoTTA_NoParaReset_UpdateALL_vitb16_L5_episodic"
-    name = "CIFAR10C_TTA_bs16_ConjPL_Poly_vitb16_L5_episodic"
+    name = "CIFAR10C_TTA_bs1_memo_updated_vitb16_L5_episodic"
     
     # MemTracker.init_tracker(detail=False, path='mem_track/', verbose=False, device=1, filename=name + '.txt')
     
@@ -155,5 +155,5 @@ def evaluate(description, path):
 
 
 if __name__ == '__main__':
-    evaluate('"Evaluation.', '/home/uqzxwang/code/test-time-adaptation/classification/cfgs/cifar10_c/conjPL.yaml')
+    evaluate('"Evaluation.', '/home/uqzxwang/code/test-time-adaptation/classification/cfgs/cifar10_c/memo.yaml')
 

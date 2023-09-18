@@ -46,25 +46,25 @@ def shear_x(pil_img, level):
     level = float_parameter(rand_lvl(level), 0.3)
     if np.random.uniform() > 0.5:
         level = -level
-    return pil_img.transform((32, 32), Image.AFFINE, (1, level, 0, 0, 1, 0), resample=Image.BILINEAR, fillcolor=128)
+    return pil_img.transform((224, 224), Image.AFFINE, (1, level, 0, 0, 1, 0), resample=Image.BILINEAR, fillcolor=128)
 
 def shear_y(pil_img, level):
     level = float_parameter(rand_lvl(level), 0.3)
     if np.random.uniform() > 0.5:
         level = -level
-    return pil_img.transform((32, 32), Image.AFFINE, (1, 0, 0, level, 1, 0), resample=Image.BILINEAR, fillcolor=128)
+    return pil_img.transform((224, 224), Image.AFFINE, (1, 0, 0, level, 1, 0), resample=Image.BILINEAR, fillcolor=128)
 
 def translate_x(pil_img, level):
     level = int_parameter(rand_lvl(level), 32 / 3)
     if np.random.random() > 0.5:
         level = -level
-    return pil_img.transform((32, 32), Image.AFFINE, (1, 0, level, 0, 1, 0), resample=Image.BILINEAR, fillcolor=128)
+    return pil_img.transform((224, 224), Image.AFFINE, (1, 0, level, 0, 1, 0), resample=Image.BILINEAR, fillcolor=128)
 
 def translate_y(pil_img, level):
     level = int_parameter(rand_lvl(level), 32 / 3)
     if np.random.random() > 0.5:
         level = -level
-    return pil_img.transform((32, 32), Image.AFFINE, (1, 0, 0, 0, 1, level), resample=Image.BILINEAR, fillcolor=128)
+    return pil_img.transform((224, 224), Image.AFFINE, (1, 0, 0, 0, 1, level), resample=Image.BILINEAR, fillcolor=128)
 
 def posterize(pil_img, level):
     level = int_parameter(rand_lvl(level), 4)
@@ -113,10 +113,10 @@ mean = [0.5, 0.5, 0.5]
 std = [0.5, 0.5, 0.5]
 
 preprocess = transforms.Compose([
-    transforms.Resize(256),
-    transforms.CenterCrop(224),    # NOTE make the size suitable for ViT input
-    transforms.ToTensor()
-    # transforms.Normalize(mean, std)
+    # transforms.Resize(256),
+    # transforms.CenterCrop(224),    # NOTE make the size suitable for ViT input
+    transforms.ToTensor(),
+    transforms.Normalize(mean, std)
 ])
 
 preaugment = transforms.Compose([
