@@ -1,3 +1,13 @@
+MODEL:
+  ADAPTATION: sar
+  ARCH: vit_base_patch16_224
+  CHECKPOINT: /home/uqzxwang/checkpoint/TTA/source/imagenet_jx_vit_base_p16_224-80ecf9dd.pth
+
+TEST:
+  BATCH_SIZE: 16
+
+SETTING: reset_each_shift
+
 CORRUPTION:
   DATASET: imagenet_c
   SEVERITY:
@@ -18,14 +28,13 @@ CORRUPTION:
     - elastic_transform
     - pixelate
     - jpeg_compression
-MODEL:
-  ADAPTATION: sar
-  ARCH: resnet50
+    
 OPTIM:
-  BETA: 0.9
-  LR: 0.00025
-  METHOD: SGD
+  METHOD: Adam
   STEPS: 1
-  WD: 0.0
-TEST:
-  BATCH_SIZE: 64
+  BETA: 0.9
+  LR: 1e-3
+  WD: 0.
+
+SAVE_PATH: /home/uqzxwang/checkpoint/TTA/SAR/
+DATA_DIR: /home/uqzxwang/data/TTA/

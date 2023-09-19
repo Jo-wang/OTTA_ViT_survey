@@ -1,7 +1,7 @@
 MODEL:
   ADAPTATION: cotta
   ARCH: vit_base_patch16_224
-  CHECKPOINT: /home/uqzxwang/checkpoint/TTA/source/modified_cifar10_acc99.67_vit_base_patch16_224.pth
+  CHECKPOINT: /home/uqzxwang/checkpoint/TTA/source/imagenet_jx_vit_base_p16_224-80ecf9dd.pth
 
 TEST:
   BATCH_SIZE: 16
@@ -28,6 +28,7 @@ CORRUPTION:
     - elastic_transform
     - pixelate
     - jpeg_compression
+    
 OPTIM:
   METHOD: Adam
   STEPS: 1
@@ -38,10 +39,10 @@ M_TEACHER:
   MOMENTUM: 0.999
 
 COTTA:
-  RST: 0.0   # 0.01
+  RST: 0.01 # 0.01
   AP: 0.92
   # teacher-student with EMA, and only update LN in student if TRAIN_ALL is False
-  TRAIN_ALL: False 
+  TRAIN_ALL: False
 
 SAVE_PATH: /home/uqzxwang/checkpoint/TTA/cotta/
 DATA_DIR: /home/uqzxwang/data/TTA/
