@@ -1,3 +1,4 @@
+from calendar import c
 import logging
 
 import timm
@@ -55,6 +56,9 @@ def get_timm_model(model_name, ckpt=None, num_classes=10):
     :param model_name: name of the model to create and initialize with pre-trained weights
     :return: pre-trained model
     """
+    if ckpt == None and num_classes == 10:
+        import sys
+        sys.exit(0)
     # check if the defined model name is supported as pre-trained model
     available_models = timm.list_models(pretrained=True)
     if not model_name in available_models:
@@ -65,12 +69,12 @@ def get_timm_model(model_name, ckpt=None, num_classes=10):
     logger.info(f"Successfully restored the weights of '{model_name}' from timm.")
     logger.info(f"Num of classes is '{num_classes}' from timm.")
 
-    # add the corresponding input normalization to the model
+    # NOTE add the corresponding input normalization to the model
     if hasattr(model, "pretrained_cfg"):
         logger.info(f"General model information: {model.pretrained_cfg}")
         logger.info(f"Adding input normalization to the model using: mean={model.pretrained_cfg['mean']} \t std={model.pretrained_cfg['std']}")
         model = normalize_model(model, mean=model.pretrained_cfg["mean"], std=model.pretrained_cfg["std"])
-    # TODO: need to check if the input normalization is needed
+
     elif hasattr(model, "default_cfg"):
         logger.info(f"General model information: {model.default_cfg}")
         logger.info(f"Adding input normalization to the model using: mean={model.default_cfg['mean']} \t std={model.default_cfg['std']}")
@@ -248,26 +252,54 @@ class ImageNetXWrapper(torch.nn.Module):
         return self.masking_layer(logits)
 
 
-class TransformerWrapper(torch.nn.Module):
+# class TransformerWrapper(torch.nn.Module):
+#     def __init__(self, model):
+#         super().__init__()
+#         self.__dict__ = model.__dict__.copy()
+
+#     def forward(self, x):
+#         # Reshape and permute the input tensor
+#         x = self.normalize(x)
+#         x = self.model._process_input(x)
+#         n = x.shape[0]
+
+#         # Expand the class token to the full batch
+#         batch_class_token = self.model.class_token.expand(n, -1, -1)
+#         x = torch.cat([batch_class_token, x], dim=1)
+
+#         x = self.model.encoder(x)
+
+#         # Classifier "token" as used by standard language architectures
+#         x = x[:, 0]
+#         return x
+
+
+class TransformerWrapper(nn.Module):
     def __init__(self, model):
         super().__init__()
-        self.__dict__ = model.__dict__.copy()
+        self.model = model  # Store the original model
+
+    def forward_encoder(self, x):
+        x = self.model.normalize(x)  # Assuming normalize is a part of your original model
+        x = self.model.model.patch_embed(x)
+        x = self.model.model.pos_drop(x)
+
+        for block in self.model.model.blocks:
+            x = block(x)
+
+        x = self.model.model.norm(x)
+        return x
+
+    def forward_classifier(self, x):
+        x = x[:, 0]  # Assuming the class token is at position 0
+        x = self.model.model.head(x)
+        return x
 
     def forward(self, x):
-        # Reshape and permute the input tensor
-        x = self.normalize(x)
-        x = self.model._process_input(x)
-        n = x.shape[0]
-
-        # Expand the class token to the full batch
-        batch_class_token = self.model.class_token.expand(n, -1, -1)
-        x = torch.cat([batch_class_token, x], dim=1)
-
-        x = self.model.encoder(x)
-
-        # Classifier "token" as used by standard language architectures
-        x = x[:, 0]
+        x = self.forward_encoder(x)
+        x = self.forward_classifier(x)
         return x
+
 
 
 def get_model(cfg, num_classes, ckpt=None):
@@ -316,64 +348,83 @@ def split_up_model(model, arch_name, dataset_name):
     :param dataset_name: name of the dataset
     :return: encoder and classifier
     """
-    if hasattr(model, "model") and hasattr(model.model, "pretrained_cfg") and hasattr(model.model, model.model.pretrained_cfg["classifier"]):
-        # split up models loaded from timm
-        classifier = deepcopy(getattr(model.model, model.model.pretrained_cfg["classifier"]))
-        encoder = model
-        encoder.model.reset_classifier(0)
-        if isinstance(model, ImageNetXWrapper):
-            encoder = nn.Sequential(encoder.normalize, encoder.model)
+    if "vit_" not in arch_name:
+        if hasattr(model, "model") and hasattr(model.model, "pretrained_cfg") and hasattr(model.model, model.model.pretrained_cfg["classifier"]):
+            # split up models loaded from timm
+            classifier = deepcopy(getattr(model.model, model.model.pretrained_cfg["classifier"]))
+            encoder = model
+            encoder.model.reset_classifier(0)
+            if isinstance(model, ImageNetXWrapper):
+                encoder = nn.Sequential(encoder.normalize, encoder.model)
 
-    elif arch_name == "Standard" and dataset_name in {"cifar10", "cifar10_c"}:
-        encoder = nn.Sequential(*list(model.children())[:-1], nn.AvgPool2d(kernel_size=8, stride=8), nn.Flatten())
-        classifier = model.fc
-    elif arch_name == "Hendrycks2020AugMix_WRN":
-        normalization = ImageNormalizer(mean=model.mu, std=model.sigma)
-        encoder = nn.Sequential(normalization, *list(model.children())[:-1], nn.AvgPool2d(kernel_size=8, stride=8), nn.Flatten())
-        classifier = model.fc
-    elif arch_name == "Hendrycks2020AugMix_ResNeXt":
-        normalization = ImageNormalizer(mean=model.mu, std=model.sigma)
-        encoder = nn.Sequential(normalization, *list(model.children())[:2], nn.ReLU(), *list(model.children())[2:-1], nn.Flatten())
-        classifier = model.classifier
-    elif dataset_name == "domainnet126":
-        encoder = model.encoder
-        classifier = model.fc
-    elif "resnet" in arch_name or "resnext" in arch_name or "wide_resnet" in arch_name or arch_name in {"Standard_R50", "Hendrycks2020AugMix", "Hendrycks2020Many", "Geirhos2018_SIN"}:
-        encoder = nn.Sequential(model.normalize, *list(model.model.children())[:-1], nn.Flatten())
-        classifier = model.model.fc
-    elif "densenet" in arch_name:
-        encoder = nn.Sequential(model.normalize, model.model.features, nn.ReLU(), nn.AdaptiveAvgPool2d((1, 1)), nn.Flatten())
-        classifier = model.model.classifier
-    elif "efficientnet" in arch_name:
-        encoder = nn.Sequential(model.normalize, model.model.features, model.model.avgpool, nn.Flatten())
-        classifier = model.model.classifier
-    elif "mnasnet" in arch_name:
-        encoder = nn.Sequential(model.normalize, model.model.layers, nn.AdaptiveAvgPool2d(output_size=(1, 1)), nn.Flatten())
-        classifier = model.model.classifier
-    elif "shufflenet" in arch_name:
-        encoder = nn.Sequential(model.normalize, *list(model.model.children())[:-1], nn.AdaptiveAvgPool2d(output_size=(1, 1)), nn.Flatten())
-        classifier = model.model.fc
-    elif "vit_" in arch_name and not "maxvit_" in arch_name:
-        encoder = TransformerWrapper(model)
-        classifier = model.model.heads.head
-    elif "swin_" in arch_name:
-        encoder = nn.Sequential(model.normalize, model.model.features, model.model.norm, model.model.permute, model.model.avgpool, model.model.flatten)
-        classifier = model.model.head
-    elif "convnext" in arch_name:
-        encoder = nn.Sequential(model.normalize, model.model.features, model.model.avgpool)
-        classifier = model.model.classifier
-    elif arch_name == "mobilenet_v2":
-        encoder = nn.Sequential(model.normalize, model.model.features, nn.AdaptiveAvgPool2d((1, 1)), nn.Flatten())
-        classifier = model.model.classifier
+        elif arch_name == "Standard" and dataset_name in {"cifar10", "cifar10_c"}:
+            encoder = nn.Sequential(*list(model.children())[:-1], nn.AvgPool2d(kernel_size=8, stride=8), nn.Flatten())
+            classifier = model.fc
+        elif arch_name == "Hendrycks2020AugMix_WRN":
+            normalization = ImageNormalizer(mean=model.mu, std=model.sigma)
+            encoder = nn.Sequential(normalization, *list(model.children())[:-1], nn.AvgPool2d(kernel_size=8, stride=8), nn.Flatten())
+            classifier = model.fc
+        elif arch_name == "Hendrycks2020AugMix_ResNeXt":
+            normalization = ImageNormalizer(mean=model.mu, std=model.sigma)
+            encoder = nn.Sequential(normalization, *list(model.children())[:2], nn.ReLU(), *list(model.children())[2:-1], nn.Flatten())
+            classifier = model.classifier
+        elif dataset_name == "domainnet126":
+            encoder = model.encoder
+            classifier = model.fc
+        elif "resnet" in arch_name or "resnext" in arch_name or "wide_resnet" in arch_name or arch_name in {"Standard_R50", "Hendrycks2020AugMix", "Hendrycks2020Many", "Geirhos2018_SIN"}:
+            encoder = nn.Sequential(model.normalize, *list(model.model.children())[:-1], nn.Flatten())
+            classifier = model.model.fc
+        elif "densenet" in arch_name:
+            encoder = nn.Sequential(model.normalize, model.model.features, nn.ReLU(), nn.AdaptiveAvgPool2d((1, 1)), nn.Flatten())
+            classifier = model.model.classifier
+        elif "efficientnet" in arch_name:
+            encoder = nn.Sequential(model.normalize, model.model.features, model.model.avgpool, nn.Flatten())
+            classifier = model.model.classifier
+        elif "mnasnet" in arch_name:
+            encoder = nn.Sequential(model.normalize, model.model.layers, nn.AdaptiveAvgPool2d(output_size=(1, 1)), nn.Flatten())
+            classifier = model.model.classifier
+        elif "shufflenet" in arch_name:
+            encoder = nn.Sequential(model.normalize, *list(model.model.children())[:-1], nn.AdaptiveAvgPool2d(output_size=(1, 1)), nn.Flatten())
+            classifier = model.model.fc
+        elif "swin_" in arch_name:
+            encoder = nn.Sequential(model.normalize, model.model.features, model.model.norm, model.model.permute, model.model.avgpool, model.model.flatten)
+            classifier = model.model.head
+        elif "convnext" in arch_name:
+            encoder = nn.Sequential(model.normalize, model.model.features, model.model.avgpool)
+            classifier = model.model.classifier
+        elif arch_name == "mobilenet_v2":
+            encoder = nn.Sequential(model.normalize, model.model.features, nn.AdaptiveAvgPool2d((1, 1)), nn.Flatten())
+            classifier = model.model.classifier
+        else:
+            raise ValueError(f"The model architecture '{arch_name}' is not supported for dataset '{dataset_name}'.")
+
+        # add a masking layer to the classifier
+        if dataset_name == "imagenet_a":
+            classifier = nn.Sequential(classifier, ImageNetXMaskingLayer(IMAGENET_A_MASK))
+        elif dataset_name == "imagenet_r":
+            classifier = nn.Sequential(classifier, ImageNetXMaskingLayer(IMAGENET_R_MASK))
+        elif dataset_name == "imagenet_d109":
+            classifier = nn.Sequential(classifier, ImageNetXMaskingLayer(IMAGENET_D109_MASK))
+
+        return encoder, classifier
     else:
-        raise ValueError(f"The model architecture '{arch_name}' is not supported for dataset '{dataset_name}'.")
+        model = TransformerWrapper(model)
+        return model, model
 
-    # add a masking layer to the classifier
-    if dataset_name == "imagenet_a":
-        classifier = nn.Sequential(classifier, ImageNetXMaskingLayer(IMAGENET_A_MASK))
-    elif dataset_name == "imagenet_r":
-        classifier = nn.Sequential(classifier, ImageNetXMaskingLayer(IMAGENET_R_MASK))
-    elif dataset_name == "imagenet_d109":
-        classifier = nn.Sequential(classifier, ImageNetXMaskingLayer(IMAGENET_D109_MASK))
 
+import torch
+import torch.nn as nn
+
+def split_vit_model(full_model):
+    # Extract the 'norm' and 'model' parts
+    norm = full_model.normalize
+    model_children = list(full_model.model.children())
+    
+    # Create the encoder by concatenating 'norm' and all layers except the last one
+    encoder_layers = [norm] + model_children[:-1]
+    encoder = nn.Sequential(*encoder_layers)
+    
+    # Extract the classification head
+    classifier = model_children[-1]
+    
     return encoder, classifier

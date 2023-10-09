@@ -2,10 +2,10 @@
 Builds upon: https://github.com/zhangmarvin/memo
 Corresponding paper: https://arxiv.org/abs/2110.09506
 """
-
+import os
 import numpy as np
 from PIL import Image
-
+import torchvision.transforms as transforms
 import torch
 from torch import nn as nn
 import torch.jit
@@ -19,6 +19,15 @@ def tta(image, n_augmentations, aug):
 
     image = np.clip(image[0].cpu().numpy() * 255., 0, 255).astype(np.uint8).transpose(1, 2, 0)
     inputs = [aug(Image.fromarray(image)) for _ in range(n_augmentations)]
+    # output_dir = "/home/uqzxwang/code/test-time-adaptation/classification/img_output-w/"
+    # if not os.path.exists(output_dir):
+    #     os.makedirs(output_dir)
+    # im = Image.fromarray(image.astype('uint8'), 'RGB')
+    # im.save(output_dir+'/org.png')
+    # for idx, img in enumerate(inputs):
+    #     img_path = os.path.join(output_dir, f"augmented_image_{idx+1}.png")
+    #     img = transforms.ToPILImage()(img).convert("RGB")
+    #     img.save(img_path)
     inputs = torch.stack(inputs).cuda()
     return inputs
 
@@ -31,8 +40,8 @@ class MEMO(TTAMethod):
         self.augmentations = aug_cifar if "cifar" in self.dataset_name else aug_imagenet
 
     def forward(self, x):
-        if self.episodic:
-            self.reset()
+        # if self.episodic:
+        #     self.reset()
 
         for _ in range(self.steps):
             x_aug = tta(x, self.n_augmentations, aug=self.augmentations)
@@ -54,8 +63,8 @@ class MEMO(TTAMethod):
         return outputs
 
     # NOTE default one
-    # def configure_model(self):
-    #     self.model.train()
+    def configure_model(self):
+        self.model.train()
 
 
     def collect_params(self):
@@ -69,25 +78,24 @@ class MEMO(TTAMethod):
         params = []
         names = []
         for nm, m in self.model.named_modules():
-            if isinstance(m, (nn.BatchNorm1d, nn.BatchNorm2d, nn.LayerNorm, nn.GroupNorm)):
-                for np, p in m.named_parameters():
-                    if np in ['weight', 'bias']:  # weight is scale, bias is shift
-                        params.append(p)
-                        names.append(f"{nm}.{np}")
+            # if isinstance(m, (nn.BatchNorm1d, nn.BatchNorm2d, nn.LayerNorm, nn.GroupNorm)):
+            for np, p in m.named_parameters():
+                if np in ['weight', 'bias']:  # weight is scale, bias is shift
+                    params.append(p)
+                    names.append(f"{nm}.{np}")
         return params, names
 
-    # NOTE not default setting in MEMO, please comment out this function
-    def configure_model(self):
-        """Configure model for use with tent."""
-        # train mode, because tent optimizes the model to minimize entropy
-        # self.model.train()
-        self.model.eval()  # eval mode to avoid stochastic depth in swin. test-time normalization is still applied
-        # disable grad, to (re-)enable only what tent updates
-        self.model.requires_grad_(False)
-        # configure norm for tent updates: enable grad + force batch statisics
-        for m in self.model.modules():
-            if isinstance(m, (nn.LayerNorm, nn.GroupNorm)):
-                m.requires_grad_(True)
+    # # NOTE not default setting in MEMO, please comment out this function
+    # def configure_model(self):
+    #     """Configure model for use with tent."""
+        
+    #     self.model.eval()  # eval mode to avoid stochastic depth in swin. test-time normalization is still applied
+    #     # disable grad, to (re-)enable only what tent updates
+    #     self.model.requires_grad_(False)
+    #     # configure norm for tent updates: enable grad + force batch statisics
+    #     for m in self.model.modules():
+    #         if isinstance(m, (nn.LayerNorm, nn.GroupNorm)):
+    #             m.requires_grad_(True)
                 
 def marginal_entropy(outputs):
     logits = outputs - outputs.logsumexp(dim=-1, keepdim=True)

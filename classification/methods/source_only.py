@@ -19,11 +19,10 @@ class SO(TTAMethod):
         params = []
         names = []
         for nm, m in self.model.named_modules():
-            if isinstance(m, (nn.BatchNorm1d, nn.BatchNorm2d, nn.LayerNorm, nn.GroupNorm)):
-                for np, p in m.named_parameters():
-                    if np in ['weight', 'bias']:  # weight is scale, bias is shift
-                        params.append(p)
-                        names.append(f"{nm}.{np}")
+            for np, p in m.named_parameters():
+                if np in ['weight', 'bias']:  # weight is scale, bias is shift
+                    params.append(p)
+                    names.append(f"{nm}.{np}")
         return params, names
     
     def configure_model(self):

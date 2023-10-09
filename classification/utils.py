@@ -8,7 +8,8 @@ import numpy as np
 from thop import profile
 from gpu_mem_track import MemTracker
 from datasets.imagenet_subsets import IMAGENET_D_MAPPING
-
+import os
+import torchvision.transforms as transforms
 
 logger = logging.getLogger(__name__)
 
@@ -82,13 +83,24 @@ def get_accuracy(model: torch.nn.Module,
                 imgs_device = imgs.to(device)
             
             # calculate the FLOPs of the model
-            if i == index:
-                flops, params = profile(model=model, inputs=[imgs_device,])
+            flop = True
+            if flop is not False:
+                if i == index:
+                    flops, params = profile(model=model, inputs=[imgs_device,])
+            
             # Track gpu memory usage before adaptation
             # MemTracker.track('Before forward')
-
+            check=False
+            if check:
+                tensor = imgs_device.squeeze(0)
+                image = transforms.ToPILImage()(tensor).convert("RGB")  # Convert tensor to PIL image
+                image_name = f"{labels}.png" 
+                image_path = os.path.join('/home/uqzxwang/code/test-time-adaptation/data/', image_name)
+                image.save(image_path)
+                
             output = model(imgs_device)
             predictions = output.argmax(1)
+            # print(predictions.cpu())
 
             if dataset_name == "imagenet_d" and domain_name != "none":
                 mapping_vector = list(IMAGENET_D_MAPPING.values())
@@ -105,4 +117,7 @@ def get_accuracy(model: torch.nn.Module,
         end_time = time.time()
         time_elipsed = end_time - start_time
     accuracy = correct.item() / len(data_loader.dataset)
-    return accuracy, domain_dict, flops, params, time_elipsed
+    if flop:
+        return accuracy, domain_dict, flops, params, time_elipsed
+    else:
+        return accuracy, domain_dict, 0.0, 0.0, time_elipsed

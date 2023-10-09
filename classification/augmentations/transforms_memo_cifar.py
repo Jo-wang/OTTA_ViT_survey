@@ -109,14 +109,14 @@ augmentations = [
     lambda x: posterize(x, 1),
 ]
 
-mean = [0.5, 0.5, 0.5]
-std = [0.5, 0.5, 0.5]
+# mean = [0.5, 0.5, 0.5]
+# std = [0.5, 0.5, 0.5]
 
 preprocess = transforms.Compose([
     # transforms.Resize(256),
     # transforms.CenterCrop(224),    # NOTE make the size suitable for ViT input
-    transforms.ToTensor(),
-    transforms.Normalize(mean, std)
+    transforms.ToTensor()
+    # transforms.Normalize(mean, std)
 ])
 
 preaugment = transforms.Compose([

@@ -1,6 +1,8 @@
 """
 Builds upon: https://github.com/BIT-DA/RoTTA
 Corresponding paper: https://arxiv.org/pdf/2303.13899.pdf
+To suit ViT (layernorm only), this implementation does not have the RBN module.
+Update LN 
 """
 
 import math
@@ -101,27 +103,21 @@ class RoTTA(TTAMethod):
         return ema_model
 
     def configure_model(self):
+        self.model.eval()  
         self.model.requires_grad_(False)
-        normlayer_names = []
-
-        for name, sub_module in self.model.named_modules():
-            if isinstance(sub_module, nn.BatchNorm1d) or isinstance(sub_module, nn.BatchNorm2d):
-                normlayer_names.append(name)
-            elif isinstance(sub_module, (nn.LayerNorm, nn.GroupNorm)):
-                sub_module.requires_grad_(True)
-
-        for name in normlayer_names:
-            bn_layer = get_named_submodule(self.model, name)
-            if isinstance(bn_layer, nn.BatchNorm1d):
-                NewBN = RobustBN1d
-            elif isinstance(bn_layer, nn.BatchNorm2d):
-                NewBN = RobustBN2d
-            else:
-                raise RuntimeError()
-
-            momentum_bn = NewBN(bn_layer, self.cfg.ROTTA.ALPHA)
-            momentum_bn.requires_grad_(True)
-            set_named_submodule(self.model, name, momentum_bn)
+        # configure norm for tent updates: enable grad + force batch statisics
+        for m in self.model.modules():
+            if isinstance(m, nn.BatchNorm2d):
+                m.requires_grad_(True)
+                # force use of batch stats in train and eval modes
+                m.track_running_stats = False
+                m.running_mean = None
+                m.running_var = None
+            elif isinstance(m, nn.BatchNorm1d):
+                m.train()   # always forcing train mode in bn1d will cause problems for single sample tta
+                m.requires_grad_(True)
+            elif isinstance(m, (nn.LayerNorm, nn.GroupNorm)):
+                m.requires_grad_(True)
 
 
 @torch.jit.script
@@ -154,64 +150,6 @@ def set_named_submodule(model, sub_name, value):
         else:
             setattr(module, names[i], value)
 
-
-class MomentumBN(nn.Module):
-    def __init__(self, bn_layer: nn.BatchNorm2d, momentum):
-        super().__init__()
-        self.num_features = bn_layer.num_features
-        self.momentum = momentum
-        if bn_layer.track_running_stats and bn_layer.running_var is not None and bn_layer.running_mean is not None:
-            self.register_buffer("source_mean", deepcopy(bn_layer.running_mean))
-            self.register_buffer("source_var", deepcopy(bn_layer.running_var))
-            self.source_num = bn_layer.num_batches_tracked
-        self.weight = deepcopy(bn_layer.weight)
-        self.bias = deepcopy(bn_layer.bias)
-
-        self.register_buffer("target_mean", torch.zeros_like(self.source_mean))
-        self.register_buffer("target_var", torch.ones_like(self.source_var))
-        self.eps = bn_layer.eps
-
-        self.current_mu = None
-        self.current_sigma = None
-
-    def forward(self, x):
-        raise NotImplementedError
-
-
-class RobustBN1d(MomentumBN):
-    def forward(self, x):
-        if self.training:
-            b_var, b_mean = torch.var_mean(x, dim=0, unbiased=False, keepdim=False)  # (C,)
-            mean = (1 - self.momentum) * self.source_mean + self.momentum * b_mean
-            var = (1 - self.momentum) * self.source_var + self.momentum * b_var
-            self.source_mean, self.source_var = deepcopy(mean.detach()), deepcopy(var.detach())
-            mean, var = mean.view(1, -1), var.view(1, -1)
-        else:
-            mean, var = self.source_mean.view(1, -1), self.source_var.view(1, -1)
-
-        x = (x - mean) / torch.sqrt(var + self.eps)
-        weight = self.weight.view(1, -1)
-        bias = self.bias.view(1, -1)
-
-        return x * weight + bias
-
-
-class RobustBN2d(MomentumBN):
-    def forward(self, x):
-        if self.training:
-            b_var, b_mean = torch.var_mean(x, dim=[0, 2, 3], unbiased=False, keepdim=False)  # (C,)
-            mean = (1 - self.momentum) * self.source_mean + self.momentum * b_mean
-            var = (1 - self.momentum) * self.source_var + self.momentum * b_var
-            self.source_mean, self.source_var = deepcopy(mean.detach()), deepcopy(var.detach())
-            mean, var = mean.view(1, -1, 1, 1), var.view(1, -1, 1, 1)
-        else:
-            mean, var = self.source_mean.view(1, -1, 1, 1), self.source_var.view(1, -1, 1, 1)
-
-        x = (x - mean) / torch.sqrt(var + self.eps)
-        weight = self.weight.view(1, -1, 1, 1)
-        bias = self.bias.view(1, -1, 1, 1)
-
-        return x * weight + bias
 
 
 class MemoryItem:

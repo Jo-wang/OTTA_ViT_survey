@@ -14,7 +14,10 @@ from datasets.imagenet_subsets import create_imagenet_subset, class_mapping_164_
 from datasets.corruptions_datasets import create_cifarc_dataset, create_imagenetc_dataset
 from datasets.imagenet_d_utils import create_symlinks_and_get_imagenet_visda_mapping
 from datasets.imagenet_dict import map_dict
+from datasets.cifarw import create_cifarw_dataset
+from datasets.cifar10_1 import create_cifar10_1_dataset
 from augmentations.transforms_adacontrast import get_augmentation_versions, get_augmentation
+
 
 
 logger = logging.getLogger(__name__)
@@ -41,11 +44,10 @@ def get_transform(dataset_name, adaptation):
             # use classical ImageNet transformation procedure
             transform = get_augmentation_versions(aug_versions="iwss", aug_type="moco-v2", res_size=256, crop_size=224)
     else:
-        # create non-method specific transformation
         transform = transforms.Compose([transforms.Resize(256),
-                                            transforms.CenterCrop(224),
-                                            transforms.ToTensor()])
-
+                                    transforms.CenterCrop(224),
+                                    transforms.ToTensor()])
+# 
     return transform
 
 
@@ -71,6 +73,10 @@ def get_test_loader(setting, adaptation, dataset_name, root_dir, domain_name, se
                                                  corruptions_seq=domain_names_all,
                                                  transform=transform,
                                                  setting=setting)
+        elif dataset_name == "cifar-w":
+            test_dataset = create_cifarw_dataset(root=data_dir, domain_name=domain_name, transform=transform, domain_names_all=domain_names_all, rng_seed=rng_seed)
+        elif dataset_name == "cifar10_1":
+            test_dataset = create_cifar10_1_dataset(root=data_dir, transform=transform, rng_seed=rng_seed)
         elif dataset_name == "imagenet_c":
             test_dataset = create_imagenetc_dataset(n_examples=num_examples,
                                                     severity=severity,
@@ -103,28 +109,30 @@ def get_test_loader(setting, adaptation, dataset_name, root_dir, domain_name, se
             raise ValueError(f"Dataset '{dataset_name}' is not supported!")
 
     try:
+        if dataset_name not in {"cifar-w", "cifar10_1"}:
+
         # shuffle the test sequence; deterministic behavior for a fixed random seed
-        random.shuffle(test_dataset.samples)
+            random.shuffle(test_dataset.samples)
 
         # randomly subsample the dataset if num_examples is specified
-        if num_examples != -1:
-            num_samples_orig = len(test_dataset)
-            # logger.info(f"Changing the number of test samples from {num_samples_orig} to {num_examples}...")
-            test_dataset.samples = random.sample(test_dataset.samples, k=min(num_examples, num_samples_orig))
+            if num_examples != -1:
+                num_samples_orig = len(test_dataset)
+                # logger.info(f"Changing the number of test samples from {num_samples_orig} to {num_examples}...")
+                test_dataset.samples = random.sample(test_dataset.samples, k=min(num_examples, num_samples_orig))
 
         # prepare samples with respect to the considered setting
-        if "mixed_domains" in setting:
-            logger.info(f"Successfully mixed the file paths of the following domains: {domain_names_all}")
-
-        if "correlated" in setting:
-            # sort the file paths by label
-            if alpha_dirichlet > 0:
-                logger.info(f"Using Dirichlet distribution with alpha={alpha_dirichlet} to temporally correlated samples by class labels...")
-                test_dataset.samples = sort_by_dirichlet(alpha_dirichlet, samples=test_dataset.samples)
-            else:
-                # sort the class labels by ascending order
-                logger.info(f"Sorting the file paths by class labels...")
-                test_dataset.samples.sort(key=lambda x: x[1])
+            if "mixed_domains" in setting:
+                logger.info(f"Successfully mixed the file paths of the following domains: {domain_names_all}")
+    
+            if "correlated" in setting:
+                # sort the file paths by label
+                if alpha_dirichlet > 0:
+                    logger.info(f"Using Dirichlet distribution with alpha={alpha_dirichlet} to temporally correlated samples by class labels...")
+                    test_dataset.samples = sort_by_dirichlet(alpha_dirichlet, samples=test_dataset.samples)
+                else:
+                    # sort the class labels by ascending order
+                    logger.info(f"Sorting the file paths by class labels...")
+                    test_dataset.samples.sort(key=lambda x: x[1])
     except AttributeError:
         logger.warning("Attribute 'samples' is missing. Continuing without shuffling, sorting or subsampling the files...")
 

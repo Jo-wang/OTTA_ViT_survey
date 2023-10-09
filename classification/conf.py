@@ -186,6 +186,8 @@ _C.ADACONTRAST.NUM_NEIGHBORS = 10
 _C.LAME = CfgNode()
 
 _C.LAME.AFFINITY = "rbf"
+# _C.LAME.AFFINITY = "KNN"
+
 _C.LAME.KNN = 5
 _C.LAME.SIGMA = 1.0
 _C.LAME.FORCE_SYMMETRY = False
@@ -369,6 +371,8 @@ def complete_data_dir_path(root, dataset_name):
                "cifar10_c": "",
                "cifar100": "",
                "cifar100_c": "",
+               "cifar-w": "",
+               "cifar10_1":""
                }
     return os.path.join(root, mapping[dataset_name])
 
@@ -377,7 +381,7 @@ def get_num_classes(dataset_name):
     dataset_name2num_classes = {"cifar10": 10, "cifar10_c": 10, "cifar100": 100,  "cifar100_c": 100,
                                 "imagenet": 1000, "imagenet_c": 1000, "imagenet_k": 1000, "imagenet_r": 200,
                                 "imagenet_a": 200, "imagenet_d": 164, "imagenet_d109": 109, "imagenet200": 200,
-                                "domainnet126": 126, "office31": 31, "visda": 12
+                                "domainnet126": 126, "office31": 31, "visda": 12, 'cifar-w': 10, 'cifar10_1':10
                                 }
     return dataset_name2num_classes[dataset_name]
 
@@ -411,7 +415,8 @@ def adaptation_method_lookup(adaptation):
                     "rmt": "RMT",
                     "roid": "ROID",
                     "so": "SO",   # eval source model on corrupted dataset
-                    "conjPL": "ConjugatePL"
+                    "conjPL": "ConjugatePL",
+                    "tast": "TAST"
                     }
     assert adaptation in lookup_table.keys(), \
         f"Adaptation method '{adaptation}' is not supported! Choose from: {list(lookup_table.keys())}"

@@ -20,25 +20,33 @@ class LAME(TTAMethod):
     def __init__(self, cfg, model, num_classes):
         super().__init__(cfg, model, num_classes)
 
-        self.affinity = eval(f'{cfg.LAME.AFFINITY}_affinity')(sigma=cfg.LAME.SIGMA, knn=cfg.LAME.KNN)
+        self.affinity = kNN_affinity(knn=cfg.LAME.KNN)
+        # eval(f'{cfg.LAME.AFFINITY}_affinity')(sigma=cfg.LAME.SIGMA, knn=cfg.LAME.KNN)
         self.force_symmetry = cfg.LAME.FORCE_SYMMETRY
 
         # split up the model
-        self.feature_extractor, self.classifier = split_up_model(self.model, cfg.MODEL.ARCH, self.dataset_name)
+        self.model = split_up_model(self.model, cfg.MODEL.ARCH, self.dataset_name)
         self.model_state, _ = self.copy_model_and_optimizer()
 
     @torch.no_grad()  # ensure grads in possible no grad context for testing
     def forward_and_adapt(self, x):
         imgs_test = x[0]
 
-        features = self.feature_extractor(imgs_test)
-        outputs = self.classifier(features)
+        features = self.model.forward_encoder(imgs_test)
+        outputs = self.model.forward_classifier(features)
 
         # --- Get unary and terms and kernel ---
-        unary = - torch.log(outputs.softmax(dim=1) + 1e-10)  # [N, K]
+        softmax_outputs = outputs.softmax(dim=1)  # [N, K]
+        unary = - torch.log(softmax_outputs + 1e-10)  # [N, K]  k is num of classes, N is batch size
+        
+        # TODO check this flatten, cuz the prediction is always 3 if use this
+        features_flatten = features.view(features.size(0), -1)
 
-        features = F.normalize(features, p=2, dim=-1)  # [N, d]
-        kernel = self.affinity(features)  # [N, N]
+        # Normalize
+        features_norm = F.normalize(features_flatten, p=2, dim=1)
+        
+        kernel = self.affinity(features_norm)  # [N, N]
+        
         if self.force_symmetry:
             kernel = 1 / 2 * (kernel + kernel.t())
 
@@ -59,7 +67,7 @@ class LAME(TTAMethod):
         return model_state, None
 
     def reset(self):
-        self.model.load_state_dict(self.model_state, strict=True)
+        self.model.load_state_dict(self.model_state, strict=False)
 
 
 class AffinityMatrix:

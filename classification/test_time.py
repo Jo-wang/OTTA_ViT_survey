@@ -25,21 +25,21 @@ from methods.rotta import RoTTA
 from methods.roid import ROID
 from methods.source_only import SO
 from methods.conjugatePL import ConjugatePL
+from methods.tast import TAST, TAST_BN
 
 from gpu_mem_track import MemTracker
 
 
 logger = logging.getLogger(__name__)
 
-os.environ["CUDA_VISIBLE_DEVICES"] = '1'
+os.environ["CUDA_VISIBLE_DEVICES"] = '0'
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def evaluate(description, path):
-    # name = "imagenet_c-vitb16_L5_eval_augreg"
-    
-    # name = "CIFAR10C_TTA_bs1_CoTTA_NoParaReset_UpdateALL_vitb16_L5_episodic"
-    name = "ImageNetC_TTA_bs16_CoTTA_ParaReset_UpdateLN_vitb16_L5_episodic"
-    
+    name = "CIFAR100-C_bs1_cotta_paraReset_UpdateLN_vitb16_L5_episodic"
+    # name = "CIFAR10-C_bs16_tast_vitb16_L5_episodic"
+    # name = "cifar-w_TTA_bs16_ConjPL_ce_vitb16_Google_filtered_episodic"
+    # name = "imagenet-c_TTA_bs16_rotta_vitb16_episodic"
     # MemTracker.init_tracker(detail=False, path='mem_track/', verbose=False, device=1, filename=name + '.txt')
     
     load_cfg_from_args(description, path)
@@ -94,6 +94,9 @@ def evaluate(description, path):
     domain_dict = {}
     
     # start evaluation
+    if dom_names_loop is None:
+        dom_names_loop = ["Single type"]
+
     for i_dom, domain_name in enumerate(dom_names_loop):
         if i_dom == 0 or "reset_each_shift" in cfg.SETTING:
             model.reset()
@@ -155,5 +158,5 @@ def evaluate(description, path):
 
 
 if __name__ == '__main__':
-    evaluate('"Evaluation.', '/home/uqzxwang/code/test-time-adaptation/classification/cfgs/imagenet_c/cotta.yaml')
+    evaluate('"Evaluation.', '/home/uqzxwang/code/test-time-adaptation/classification/cfgs/cifar100_c/cotta.yaml')
 
