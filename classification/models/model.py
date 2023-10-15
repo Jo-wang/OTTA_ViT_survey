@@ -421,10 +421,10 @@ def split_vit_model(full_model):
     model_children = list(full_model.model.children())
     
     # Create the encoder by concatenating 'norm' and all layers except the last one
-    encoder_layers = [norm] + model_children[:-1]
+    encoder_layers = [norm] + model_children[:-2]
     encoder = nn.Sequential(*encoder_layers)
     
     # Extract the classification head
-    classifier = model_children[-1]
+    classifier = nn.Sequential(*model_children[-2:])
     
     return encoder, classifier

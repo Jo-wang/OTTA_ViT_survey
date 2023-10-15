@@ -83,10 +83,10 @@ def get_accuracy(model: torch.nn.Module,
                 imgs_device = imgs.to(device)
             
             # calculate the FLOPs of the model
-            flop = True
+            flop = False
             if flop is not False:
-                if i == index:
-                    flops, params = profile(model=model, inputs=[imgs_device,])
+                # if i == index:
+                flops, params = profile(model=model, inputs=[imgs_device,])
             
             # Track gpu memory usage before adaptation
             # MemTracker.track('Before forward')

@@ -7,7 +7,7 @@ class SO(TTAMethod):
     def __init__(self, cfg, model, num_classes):
         super().__init__(cfg, model, num_classes)
 
-    @torch.enable_grad()  # ensure grads in possible no grad context for testing
+    # @torch.enable_grad()  # ensure grads in possible no grad context for testing
     def forward_and_adapt(self, x):
         with torch.no_grad():
             imgs_test = x[0]

@@ -108,8 +108,8 @@ augmentations = [
     lambda x: posterize(x, 1),
 ]
 
-mean = [0.485, 0.456, 0.406]
-std = [0.229, 0.224, 0.225]
+# mean = [0.485, 0.456, 0.406]
+# std = [0.229, 0.224, 0.225]
 preprocess = transforms.Compose([
     transforms.ToTensor(),
     # transforms.Normalize(mean, std)

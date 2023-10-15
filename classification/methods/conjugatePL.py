@@ -46,7 +46,7 @@ class ConjugatePL(TTAMethod):
     
     # NOTE: change num_class to 1000 if imagenet-c
     @torch.enable_grad()  # ensure grads in possible no grad context for testing
-    def forward_and_adapt(self, x, n_inner_iter=1, adaptive=True, use_test_bn=True, num_classes=10, source_poly=True, temp=2.0, eps=1e-6):
+    def forward_and_adapt(self, x, n_inner_iter=1, adaptive=True, use_test_bn=True, num_classes=100, source_poly=False, temp=2.0, eps=1e-6):
         img_test = x[0]
         outputs = self.model(img_test)
         outputs = outputs / temp

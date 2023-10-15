@@ -132,7 +132,8 @@ class TAST(TTAMethod):
         self.featurizer, self.classifier = split_vit_model(model)
 
         # store supports and corresponding labels
-        warmup_supports = self.classifier.weight.data # 10,768
+        # warmup_supports = self.model.get_classifier().weight.data
+        warmup_supports = self.classifier[1].weight.data # 10,768
         self.warmup_supports = warmup_supports
         warmup_prob = self.classifier(self.warmup_supports)
         self.warmup_labels = F.one_hot(warmup_prob.argmax(1), num_classes=num_classes).float()
@@ -170,22 +171,14 @@ class TAST(TTAMethod):
             z = x
 
         if adapt:
+            z = z[:, 0]
             p_supports = self.classifier(z)
+            # p_supports = p_supports.squeeze()
             yhat = torch.nn.functional.one_hot(p_supports.argmax(1), num_classes=self.num_classes).float()
             ent = softmax_entropy(p_supports)
-
-            # prediction
-            self.supports = self.supports.to(z.device)
-            self.labels = self.labels.to(z.device)
-            self.ent = self.ent.to(z.device)
-            ent = ent.to(z.device)
-            yhat = yhat.to(z.device)
-            z = torch.mean(z, dim=1)
             self.supports = torch.cat([self.supports, z])
-            self.label_expanded = self.labels.unsqueeze(0)
-            self.labels = torch.cat([self.label_expanded, yhat], dim=0)
-            self.ent_expended = self.ent.unsqueeze(0)
-            self.ent = torch.cat([self.ent_expended ,ent], dim=0)
+            self.labels = torch.cat([self.labels, yhat])
+            self.ent = torch.cat([self.ent, ent])
 
         supports, labels = self.select_supports()
 
@@ -202,7 +195,7 @@ class TAST(TTAMethod):
         :param mlp: multiple projection heads
         :return: classification logits of z
         '''
-        z = torch.mean(z, dim=1)
+        # z = z[:, 0]
         B, dim = z.size()
         N, dim_ = supports.size()
 
@@ -263,7 +256,7 @@ class TAST(TTAMethod):
     
     @torch.enable_grad()
     def forward_and_adapt(self, z, supports, labels):
-        z = torch.mean(z, dim=1)
+        # z = z[:, 0]
         # targets : pseudo labels, outputs: for prediction
         with torch.no_grad():
             targets, outputs = self.target_generation(z, supports, labels)
@@ -304,11 +297,9 @@ class TAST(TTAMethod):
 
     def cosine_distance_einsum(self, X, Y):
         # X, Y [n, dim], [m, dim] -> [n,m]
-        # add this GAP as the ViT has 14*14 patches so the size for feature is b*p*c not b*c
         X = F.normalize(X, dim=1)
         Y = F.normalize(Y, dim=1)
-        XX = torch.einsum('nd, nd->n', X, X)[:, None]
-        # XX.squeeze()# [n, 1]
+        XX = torch.einsum('nd, nd->n', X, X)[:, None]  # [n, 1]
         YY = torch.einsum('md, md->m', Y, Y)  # [m]
         XY = 2 * torch.matmul(X, Y.T)  # [n,m]
         return XX + YY - XY
@@ -342,30 +333,33 @@ class TAST(TTAMethod):
         return targets, outputs
 
 class TAST_BN(TTAMethod):
-    def __init__(self, input_shape, num_classes, num_domains, hparams, algorithm):
-        super().__init__(input_shape, num_classes, num_domains, hparams)
-        self.featurizer = algorithm.featurizer
-        self.classifier = algorithm.classifier
+    def __init__(self, cfg, model, num_classes):
+        super().__init__(cfg, model, num_classes)
+        self.model = model
+        # trained feature extractor and last linear classifier
+        self.featurizer, self.classifier = split_vit_model(model)
 
-        # store supports examples and corresponding labels. we store test example itself instead of the feature representations.
+        self.filter_K = cfg.filter_K
+        self.steps = cfg.gamma
+        self.num_ensemble = cfg.num_ensemble
+        self.lr = cfg.OPTIM.LR
+        self.tau = cfg.tau
+        self.init_mode = cfg.init_mode
+        self.num_classes = num_classes
+        self.k = cfg.k
+        self.cached_loader = cfg.cached_loader
+       
+
         self.supports = None
         self.labels = None
         self.ent = None
-
-        # hparams
-        self.filter_K = hparams['filter_K']
 
         # we restrict the size of support set
         if self.filter_K * num_classes >150 :
             self.filter_K = int(150 / num_classes)
 
-        self.steps = hparams['gamma']
-        self.lr = hparams['lr']
-        self.tau = hparams['tau']
-        self.num_classes = num_classes
-        self.k = hparams['k']
 
-        self.model, self.optimizer = self.configure_model_optimizer(algorithm)
+        self.model, self.optimizer = self.configure_model_optimizer(self.model)
 
         self.model_state, self.optimizer_state = \
             self.copy_model_and_optimizer(self.model, self.optimizer)
@@ -379,7 +373,7 @@ class TAST_BN(TTAMethod):
 
     def load_model_and_optimizer(self, model, optimizer, model_state, optimizer_state):
         """Restore the model and optimizer states from copies."""
-        model.load_state_dict(model_state, strict=True)
+        model.load_state_dict(model_state, strict=False)
         optimizer.load_state_dict(optimizer_state)
 
     def collect_params(self, model):
@@ -403,6 +397,7 @@ class TAST_BN(TTAMethod):
 
     def configure_model_optimizer(self, algorithm):
         adapted_algorithm = copy.deepcopy(algorithm)
+        adapted_algorithm.featurizer, _ = split_vit_model(adapted_algorithm)
         adapted_algorithm.featurizer = self.configure_model(adapted_algorithm.featurizer)
         params, param_names = self.collect_params(adapted_algorithm.featurizer)
         optimizer = torch.optim.Adam(params, lr=self.lr)
@@ -412,6 +407,7 @@ class TAST_BN(TTAMethod):
     def forward(self, x, adapt=False):
         if adapt:
             p_supports = self.model(x)
+            p_supports = p_supports[:,0]
             yhat = torch.nn.functional.one_hot(p_supports.argmax(1), num_classes=self.num_classes).float()
             ent = softmax_entropy(p_supports)
 
@@ -422,9 +418,7 @@ class TAST_BN(TTAMethod):
                 self.labels = yhat
                 self.ent = ent
             else:
-                self.supports = self.supports.to(x.device)
-                self.labels = self.labels.to(x.device)
-                self.ent = self.ent.to(x.device)
+                
                 self.supports = torch.cat([self.supports, x])
                 self.labels = torch.cat([self.labels, yhat])
                 self.ent = torch.cat([self.ent, ent])
@@ -473,7 +467,7 @@ class TAST_BN(TTAMethod):
     @torch.enable_grad()
     def forward_and_adapt(self, x, supports, labels):
         feats = torch.cat((x, supports), 0)
-        feats = self.model.featurizer(feats)
+        feats = self.model.featurizer(feats)[:,0]
         z, supports = feats[:x.size(0)], feats[x.size(0):]
         del feats
 

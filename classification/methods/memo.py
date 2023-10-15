@@ -62,7 +62,7 @@ class MEMO(TTAMethod):
         
         return outputs
 
-    # NOTE default one
+    # # NOTE default one
     def configure_model(self):
         self.model.train()
 
@@ -85,7 +85,7 @@ class MEMO(TTAMethod):
                     names.append(f"{nm}.{np}")
         return params, names
 
-    # # NOTE not default setting in MEMO, please comment out this function
+    # # # NOTE not default setting in MEMO, please comment out this function
     # def configure_model(self):
     #     """Configure model for use with tent."""
         
