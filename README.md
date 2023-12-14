@@ -1,8 +1,6 @@
 # Online Test-time Adaptation
-This is an open-source online test-time adaptation repository based on PyTorch. It is also the official repository for the following works:
-- [Introducing Intermediate Domains for Effective Self-Training during Test-Time](https://arxiv.org/abs/2208.07736) 
-- [Robust Mean Teacher for Continual and Gradual Test-Time Adaptation](https://arxiv.org/abs/2211.13081) (CVPR2023).
-- [Universal Test-time Adaptation through Weight Ensembling, Diversity Weighting, and Prior Correction](https://arxiv.org/abs/2306.00650).
+This is the official implementation of paper In Search of Lost Online Test-time Adaptation: A Survey.
+This implementation based on ViT backbones.
 
 
 ## Prerequisites
@@ -24,55 +22,26 @@ This repository allows studying a wide range of datasets, models, settings, and 
   - `cifar10_c` [CIFAR10-C](https://zenodo.org/record/2535967#.ZBiI7NDMKUk)
   - `cifar100_c` [CIFAR100-C](https://zenodo.org/record/3555552#.ZBiJA9DMKUk)
   - `imagenet_c` [ImageNet-C](https://zenodo.org/record/2235448#.Yj2RO_co_mF)
-  - `imagenet_a` [ImageNet-A](https://github.com/hendrycks/natural-adv-examples)
-  - `imagenet_r` [ImageNet-R](https://github.com/hendrycks/imagenet-r)
-  - `imagenet_k` [ImageNet-Sketch](https://github.com/HaohanWang/ImageNet-Sketch)
-  - `imagenet_d` [ImageNet-D](https://github.com/bethgelab/robustness/tree/main/examples/imagenet_d)
   
 - **Settings**
   - `reset_each_shift` Reset the model state after the adaptation to a domain.
-  - `continual` Train the model on a sequence of domains without knowing when a domain shift occurs.
-  - `mixed_domains` Train the model on one long test sequence where consecutive test samples are likely to originate from different domains.
-  - `correlated` Same as the continual setting but the samples of each domain are further sorted by class label.
-  - `mixed_domains_correlated` Mixed domains and sorted by class label.
-  - Combinations like `gradual_correlated` or `reset_each_shift_correlated` are also possible.
  
 - **Batch Size**
-  - 1, 16, 32, 64, 200
+  - 1, 16, 32, 64, 128
 
 - **Backbone**
   - ViT B-16 224
-  - 
   
   
 - **Methods**
-  - LN -Tent
-  - Teacher-Student with EMA (Update all parameters of ViT)
-  - Teacher-Student with EMA (Update LN parameters of ViT)
-  - Teacher-Student with EMA (Update all parameters of ViT with parameter restore)
-  - Teacher-Student with EMA (Update LN parameters of ViT with parameter restore)
-  - 
-  - The repository currently supports the following methods: BN-0 (source), BN-alpha, BN-1, [TENT](https://openreview.net/pdf?id=uXl3bZLkr3c),
-  [MEMO](https://openreview.net/pdf?id=vn74m_tWu8O), [ETA](https://arxiv.org/abs/2204.02610), [EATA](https://arxiv.org/abs/2204.02610),
-  [CoTTA](https://arxiv.org/abs/2203.13591), [AdaContrast](https://arxiv.org/abs/2204.10377), [LAME](https://arxiv.org/abs/2201.05718), 
-  [SAR](https://arxiv.org/pdf/2302.12400.pdf), [RoTTA](https://arxiv.org/pdf/2303.13899.pdf),
-  [GTTA](https://arxiv.org/abs/2208.07736), [RMT](https://arxiv.org/abs/2211.13081), and [ROID](https://arxiv.org/abs/2306.00650) .
+  - LN - Tent
+  - CoTTA
+  - MEMO
+  - SAR
+  - Conjugate PL
+  - RoTTA
+  - TAST
 
-</details>
-
-### Get Started
-The corresponding datasets need to be downloaded to run one of the following benchmarks.
-- *CIFAR10-to-CIFAR10-C*: The data is automatically downloaded.
-- *CIFAR100-to-CIFAR100-C*: The data is automatically downloaded.
-- *ImageNet-to-ImageNet-C*: for non source-free methods, download [ImageNet](https://www.image-net.org/download.php) and [ImageNet-C](https://zenodo.org/record/2235448#.Yj2RO_co_mF).
-- *ImageNet-to-ImageNet-A*: for non source-free methods, download [ImageNet](https://www.image-net.org/download.php) and [ImageNet-A](https://github.com/hendrycks/natural-adv-examples).
-- *ImageNet-to-ImageNet-R*: for non source-free methods, download [ImageNet](https://www.image-net.org/download.php) and [ImageNet-R](https://github.com/hendrycks/imagenet-r).
-- *ImageNet-to-ImageNet-Sketch*: for non source-free methods, download [ImageNet](https://www.image-net.org/download.php) and [ImageNet-Sketch](https://github.com/HaohanWang/ImageNet-Sketch).
-- *ImageNet-to-ImageNet-D*: for non source-free methods, download [ImageNet](https://www.image-net.org/download.php). For [ImageNet-D](https://openreview.net/pdf?id=LiC2vmzbpMO), see the download instructions for DomainNet-126 below. ImageNet-D is created by symlinks set up at the first use.
-- *ImageNet-to-ImageNet-D109*: see instructions for DomainNet-126 below.
-- *DomainNet-126*: download the 6 splits of the [cleaned version](http://ai.bu.edu/M3SDA/). Following [MME](https://arxiv.org/abs/1904.06487), DomainNet-126 only uses a subset that contains 126 classes from 4 domains.
-
-Next, specify the root folder for all datasets `_C.DATA_DIR = "./data"` in the file `conf.py`. For the individual datasets, the directory names are specified in `conf.py` as a dictionary (see function `complete_data_dir_path`). If your directory names deviate from the ones specified in the mapping dictionary, you can modify them.
 
 
 ### Run Experiments
@@ -104,50 +73,34 @@ For GTTA, we provide checkpoint files for the style transfer network. The checkp
 
 
 ### Changing Configurations
-Changing the evaluation configuration is extremely easy. For example, to run TENT on ImageNet-to-ImageNet-C in the `reset_each_shift` setting with a ResNet-50 and the `IMAGENET1K_V1` initialization, the arguments below have to be passed. 
-Further models and initializations can be found [here (torchvision)](https://pytorch.org/vision/0.14/models.html) or [here (timm)](https://github.com/huggingface/pytorch-image-models/tree/v0.6.13).
-```bash
-python test_time.py --cfg cfgs/imagenet_c/tent.yaml MODEL.ARCH resnet50 MODEL.WEIGHTS IMAGENET1K_V1 SETTING reset_each_shift
-```
+All the hyperparameter could be changed in the folder classification/cfgs/
 
 
 ### Acknowledgements
-+ Robustbench [official](https://github.com/RobustBench/robustbench)
-+ CoTTA [official](https://github.com/qinenergy/cotta)
-+ TENT [official](https://github.com/DequanWang/tent)
-+ AdaContrast [official](https://github.com/DianCh/AdaContrast)
-+ EATA [official](https://github.com/mr-eggplant/EATA)
-+ LAME [official](https://github.com/fiveai/LAME)
-+ MEMO [official](https://github.com/zhangmarvin/memo)
-+ RoTTA [official](https://github.com/BIT-DA/RoTTA)
-+ SAR [official](https://github.com/mr-eggplant/SAR)
++ Test-time Adaptation [official](https://github.com/mariodoebler/test-time-adaptation)
 
+### Acknowledgements
++ We would like to thank all the authors mentioned in the paper. Thank you for contributing Test-time Adaptation community.
+
+Please consider cite:
 ```
-
-### CarlaTTA
-We provide the different datasets of CarlaTTA as individual zip-files on Google Drive:
-+ clear [download](https://drive.google.com/file/d/19HUmZkL5wo4gY7w5cfztgNVga_uNSVUp/view?usp=sharing)
-+ day2night [download](https://drive.google.com/file/d/1R3br738UCPGryhWhJE-Uy4sCJW3FaVTr/view?usp=sharing)
-+ clear2fog  [download](https://drive.google.com/file/d/1LeNF9PpdJ7lbpsvNwGy9xpC-AYlPiwMI/view?usp=sharing)
-+ clear2rain [download](https://drive.google.com/file/d/1TJfQ4CjIOJtrOpUCQ7VyqKBVYQndGNa_/view?usp=sharing)
-+ dynamic [download](https://drive.google.com/file/d/1jb1qJMhOSJ48XUQ7eRqT7agnDK9OBwox/view?usp=sharing)
-+ dynamic-slow [download](https://drive.google.com/file/d/1RTciKaw2LhlQ4ecKMlarSKyOzsDgaurT/view?usp=sharing)
-+ clear-highway [download](https://drive.google.com/file/d/1lZlxwBVBSBAguONX9K6gI2NlWqAxECvB/view?usp=sharing)
-+ highway [download](https://drive.google.com/file/d/1Q_3iOuDK4t-W3lvsHwRddDqHTE8GEAIj/view?usp=sharing)
-
-Code is constructed based on:
-```
-@article{marsden2022introducing,
-  title={Introducing Intermediate Domains for Effective Self-Training during Test-Time},
-  author={Marsden, Robert A and D{\"o}bler, Mario and Yang, Bin},
-  journal={arXiv preprint arXiv:2208.07736},
-  year={2022}
+@article{DBLP:journals/corr/abs-2310-20199,
+  author       = {Zixin Wang and
+                  Yadan Luo and
+                  Liang Zheng and
+                  Zhuoxiao Chen and
+                  Sen Wang and
+                  Zi Huang},
+  title        = {In Search of Lost Online Test-time Adaptation: {A} Survey},
+  journal      = {CoRR},
+  volume       = {abs/2310.20199},
+  year         = {2023},
+  url          = {https://doi.org/10.48550/arXiv.2310.20199},
+  doi          = {10.48550/ARXIV.2310.20199},
+  eprinttype    = {arXiv},
+  eprint       = {2310.20199},
+  timestamp    = {Fri, 03 Nov 2023 10:56:40 +0100},
+  biburl       = {https://dblp.org/rec/journals/corr/abs-2310-20199.bib},
+  bibsource    = {dblp computer science bibliography, https://dblp.org}
 }
 ```
-
-### Acknowledgements
-+ Segmentation model is from AdaptSegNet [official](https://github.com/wasidennis/AdaptSegNet)
-+ CarlaTTA was generated using Carla [official](https://github.com/carla-simulator/carla)
-+ ASM [official](https://github.com/RoyalVane/ASM)
-+ SM-PPM [official](https://github.com/W-zx-Y/SM-PPM)
-+ MEMO [official](https://github.com/zhangmarvin/memo)
