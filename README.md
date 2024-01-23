@@ -16,6 +16,7 @@ conda activate tta
   - `cifar10_c` [CIFAR10-C](https://zenodo.org/record/2535967#.ZBiI7NDMKUk)
   - `cifar100_c` [CIFAR100-C](https://zenodo.org/record/3555552#.ZBiJA9DMKUk)
   - `imagenet_c` [ImageNet-C](https://zenodo.org/record/2235448#.Yj2RO_co_mF)
+  - `CIFAR-10-Warehouse` [CIFAR-10-Warehouse](https://github.com/sxzrt/CIFAR-10-W)
   
 - **Settings**
   - `reset_each_shift` Reset the model state after the adaptation to a domain.
