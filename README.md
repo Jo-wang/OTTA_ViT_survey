@@ -2,6 +2,8 @@
 This is the official implementation of paper In Search of Lost Online Test-time Adaptation: A Survey.
 This implementation based on ViT backbones.
 
+Note that the final version of the code is still processing. We will release it later. Thank you!
+
 
 ## Prerequisites
 To use the repository, we provide a conda environment.
