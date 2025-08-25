@@ -38,6 +38,7 @@ conda activate tta
   - Conjugate PL
   - RoTTA
   - TAST
+  - ROID
 
 
 
@@ -71,3 +72,4 @@ Please consider cite:
 ### Acknowledgements
 + Test-time Adaptation [official](https://github.com/mariodoebler/test-time-adaptation)
 + We would like to thank all the authors mentioned in the paper. Thank you for contributing Test-time Adaptation community.
+
