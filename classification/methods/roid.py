@@ -1,4 +1,4 @@
-import torch.jit
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.utils.weight_norm import WeightNorm
@@ -7,15 +7,9 @@ from copy import deepcopy
 from methods.base import TTAMethod
 from models.model import ResNetDomainNet126
 from augmentations.transforms_cotta import get_tta_transforms
-
-
-@torch.no_grad()
-def update_model_variables(model, src_model, alpha=0.99):
-    if alpha < 1.0:
-        for param, src_param in zip(model.parameters(), src_model.parameters()):
-            if param.requires_grad:
-                param.data[:] = alpha * param[:].data[:] + (1 - alpha) * src_param[:].data[:]
-    return model
+from utils.registry import ADAPTATION_REGISTRY
+from utils.losses import Entropy, SymmetricCrossEntropy, SoftLikelihoodRatio
+from utils.misc import ema_update_model
 
 
 @torch.no_grad()
@@ -23,6 +17,7 @@ def update_model_probs(x_ema, x, momentum=0.9):
     return momentum * x_ema + (1 - momentum) * x
 
 
+@ADAPTATION_REGISTRY.register()
 class ROID(TTAMethod):
     def __init__(self, cfg, model, num_classes):
         super().__init__(cfg, model, num_classes)
@@ -34,13 +29,13 @@ class ROID(TTAMethod):
         self.momentum_probs = cfg.ROID.MOMENTUM_PROBS
         self.temperature = cfg.ROID.TEMPERATURE
         self.batch_size = cfg.TEST.BATCH_SIZE
-        self.class_probs_ema = 1 / self.num_classes * torch.ones(self.num_classes).cuda()
-        self.tta_transform = get_tta_transforms(self.dataset_name, padding_mode="reflect", cotta_augs=False)
+        self.class_probs_ema = 1 / self.num_classes * torch.ones(self.num_classes).to(self.device)
+        self.tta_transform = get_tta_transforms(self.img_size, padding_mode="reflect", cotta_augs=False)
 
         # setup loss functions
-        self.sce = SymmetricCrossEntropy()
         self.slr = SoftLikelihoodRatio()
-        self.ent = Entropy()
+        self.symmetric_cross_entropy = SymmetricCrossEntropy()
+        self.softmax_entropy = Entropy()  # not used as loss
 
         # copy and freeze the source model
         if isinstance(model, ResNetDomainNet126):  # https://github.com/pytorch/pytorch/issues/28594
@@ -50,7 +45,7 @@ class ROID(TTAMethod):
                         delattr(module, hook.name)
 
         # note: reduce memory consumption by only saving normalization parameters
-        self.src_model = deepcopy(self.model)
+        self.src_model = deepcopy(self.model).cpu()
         for param in self.src_model.parameters():
             param.detach_()
 
@@ -59,8 +54,7 @@ class ROID(TTAMethod):
         self.models = [self.src_model, self.model]
         self.model_states, self.optimizer_state = self.copy_model_and_optimizer()
 
-    @torch.enable_grad()  # ensure grads in possible no grad context for testing
-    def forward_and_adapt(self, x):
+    def loss_calculation(self, x):
         imgs_test = x[0]
         outputs = self.model(imgs_test)
 
@@ -72,7 +66,7 @@ class ROID(TTAMethod):
                 mask = weights_div < weights_div.mean()
 
                 # calculate certainty based weight
-                weights_cert = - self.ent(logits=outputs)
+                weights_cert = - self.softmax_entropy(logits=outputs)
                 weights_cert = (weights_cert - weights_cert.min()) / (weights_cert.max() - weights_cert.min())
 
                 # calculate the final weights
@@ -93,21 +87,47 @@ class ROID(TTAMethod):
         # calculate the consistency loss
         if self.use_consistency:
             outputs_aug = self.model(self.tta_transform(imgs_test[~mask]))
-            loss += (self.sce(x=outputs_aug, x_ema=outputs[~mask]) * weights[~mask]).sum() / self.batch_size
+            loss += (self.symmetric_cross_entropy(x=outputs_aug, x_ema=outputs[~mask]) * weights[~mask]).sum() / self.batch_size
 
-        # update the model
-        loss.backward()
-        self.optimizer.step()
-        self.optimizer.zero_grad()
-        self.model = update_model_variables(model=self.model, src_model=self.src_model, alpha=self.momentum_src)
+        return outputs, loss
 
-        if self.use_prior_correction:
-            prior = outputs.softmax(1).mean(0)
-            smooth = max(1 / outputs.shape[0], 1 / outputs.shape[1]) / torch.max(prior)
-            smoothed_prior = (prior + smooth) / (1 + smooth * outputs.shape[1])
-            return outputs * smoothed_prior
+    @torch.enable_grad()
+    def forward_and_adapt(self, x):
+        if self.mixed_precision and self.device == "cuda":
+            with torch.cuda.amp.autocast():
+                outputs, loss = self.loss_calculation(x)
+            self.scaler.scale(loss).backward()
+            self.scaler.step(self.optimizer)
+            self.scaler.update()
+            self.optimizer.zero_grad()
         else:
-            return outputs
+            outputs, loss = self.loss_calculation(x)
+            loss.backward()
+            self.optimizer.step()
+            # self.scheduler.step()
+            self.optimizer.zero_grad()
+
+        self.model = ema_update_model(
+            model_to_update=self.model,
+            model_to_merge=self.src_model,
+            momentum=self.momentum_src,
+            device=self.device
+        )
+
+        with torch.no_grad():
+            if self.use_prior_correction:
+                prior = outputs.softmax(1).mean(0)
+                smooth = max(1 / outputs.shape[0], 1 / outputs.shape[1]) / torch.max(prior)
+                smoothed_prior = (prior + smooth) / (1 + smooth * outputs.shape[1])
+                outputs *= smoothed_prior
+
+        return outputs
+
+    def reset(self):
+        if self.model_states is None or self.optimizer_state is None:
+            raise Exception("cannot reset without saved model/optimizer state")
+        self.load_model_and_optimizer()
+        self.class_probs_ema = 1 / self.num_classes * torch.ones(self.num_classes).to(self.device)
 
     def collect_params(self):
         """Collect the affine scale + shift parameters from normalization layers.
@@ -127,8 +147,8 @@ class ROID(TTAMethod):
 
     def configure_model(self):
         """Configure model."""
-        self.model.eval()
-        self.model.requires_grad_(False)
+        self.model.eval()   # eval mode to avoid stochastic depth in swin. test-time normalization is still applied
+        self.model.requires_grad_(False)  # disable grad, to (re-)enable only necessary parts
         # re-enable gradient for normalization layers
         for m in self.model.modules():
             if isinstance(m, nn.BatchNorm2d):
@@ -142,32 +162,3 @@ class ROID(TTAMethod):
                 m.requires_grad_(True)
             elif isinstance(m, (nn.LayerNorm, nn.GroupNorm)):
                 m.requires_grad_(True)
-
-
-class SoftLikelihoodRatio(nn.Module):
-    def __init__(self, clip=0.99, eps=1e-5):
-        super(SoftLikelihoodRatio, self).__init__()
-        self.eps = eps
-        self.clip = clip
-
-    def __call__(self, logits):
-        probs = logits.softmax(1)
-        probs = torch.clamp(probs, min=0.0, max=self.clip)
-        return - (probs * torch.log((probs / (torch.ones_like(probs) - probs)) + self.eps)).sum(1)
-
-
-class Entropy(nn.Module):
-    def __init__(self):
-        super(Entropy, self).__init__()
-
-    def __call__(self, logits):
-        return -(logits.softmax(1) * logits.log_softmax(1)).sum(1)
-
-
-class SymmetricCrossEntropy(nn.Module):
-    def __init__(self, alpha=0.5):
-        super(SymmetricCrossEntropy, self).__init__()
-        self.alpha = alpha
-
-    def __call__(self, x, x_ema):
-        return -(1-self.alpha) * (x_ema.softmax(1) * x.log_softmax(1)).sum(1) - self.alpha * (x.softmax(1) * x_ema.log_softmax(1)).sum(1)
