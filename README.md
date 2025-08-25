@@ -48,23 +48,22 @@ All the hyperparameter could be changed in the folder classification/cfgs/
 
 Please consider cite:
 ```
-@article{DBLP:journals/corr/abs-2310-20199,
+@article{DBLP:journals/ijcv/WangLZCWH25,
   author       = {Zixin Wang and
                   Yadan Luo and
                   Liang Zheng and
                   Zhuoxiao Chen and
                   Sen Wang and
                   Zi Huang},
-  title        = {In Search of Lost Online Test-time Adaptation: {A} Survey},
-  journal      = {CoRR},
-  volume       = {abs/2310.20199},
-  year         = {2023},
-  url          = {https://doi.org/10.48550/arXiv.2310.20199},
-  doi          = {10.48550/ARXIV.2310.20199},
-  eprinttype    = {arXiv},
-  eprint       = {2310.20199},
-  timestamp    = {Fri, 03 Nov 2023 10:56:40 +0100},
-  biburl       = {https://dblp.org/rec/journals/corr/abs-2310-20199.bib},
+  title        = {In Search of Lost Online Test-Time Adaptation: {A} Survey},
+  journal      = {Int. J. Comput. Vis.},
+  volume       = {133},
+  number       = {3},
+  pages        = {1106--1139},
+  year         = {2025},
+  url          = {https://doi.org/10.1007/s11263-024-02213-5},
+  doi          = {10.1007/S11263-024-02213-5},
+  biburl       = {https://dblp.org/rec/journals/ijcv/WangLZCWH25.bib},
   bibsource    = {dblp computer science bibliography, https://dblp.org}
 }
 ```
@@ -72,4 +71,5 @@ Please consider cite:
 ### Acknowledgements
 + Test-time Adaptation [official](https://github.com/mariodoebler/test-time-adaptation)
 + We would like to thank all the authors mentioned in the paper. Thank you for contributing Test-time Adaptation community.
+
 
