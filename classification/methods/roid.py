@@ -7,9 +7,9 @@ from copy import deepcopy
 from methods.base import TTAMethod
 from models.model import ResNetDomainNet126
 from augmentations.transforms_cotta import get_tta_transforms
-from utils.registry import ADAPTATION_REGISTRY
-from utils.losses import Entropy, SymmetricCrossEntropy, SoftLikelihoodRatio
-from utils.misc import ema_update_model
+from util.registry import ADAPTATION_REGISTRY
+from util.losses import Entropy, SymmetricCrossEntropy, SoftLikelihoodRatio
+from util.misc import ema_update_model
 
 
 @torch.no_grad()
