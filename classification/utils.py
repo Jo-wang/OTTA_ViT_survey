@@ -81,24 +81,11 @@ def get_accuracy(model: torch.nn.Module,
                 imgs_device = [img.to(device) for img in imgs]
             else:
                 imgs_device = imgs.to(device)
-            
-            # calculate the FLOPs of the model
-            flop = False
-            if flop is not False:
-                # if i == index:
-                flops, params = profile(model=model, inputs=[imgs_device,])
-            
-            # Track gpu memory usage before adaptation
-            # MemTracker.track('Before forward')
-            check=False
-            if check:
-                tensor = imgs_device.squeeze(0)
-                image = transforms.ToPILImage()(tensor).convert("RGB")  # Convert tensor to PIL image
-                image_name = f"{labels}.png" 
-                image_path = os.path.join('/home/uqzxwang/code/test-time-adaptation/data/', image_name)
-                image.save(image_path)
                 
             output = model(imgs_device)
+            if isinstance(output, dict):
+                output = output["output"]
+
             predictions = output.argmax(1)
             # print(predictions.cpu())
 
@@ -111,13 +98,11 @@ def get_accuracy(model: torch.nn.Module,
             if "mixed_domains" in setting and len(data) >= 3:
                 domain_dict = split_results_by_domain(domain_dict, data, predictions)
                 
-            # mem_dict = print_mem_info()
             
-            # wandb.summary.update(mem_dict)
         end_time = time.time()
         time_elipsed = end_time - start_time
     accuracy = correct.item() / len(data_loader.dataset)
-    if flop:
-        return accuracy, domain_dict, flops, params, time_elipsed
-    else:
-        return accuracy, domain_dict, 0.0, 0.0, time_elipsed
+
+    return accuracy, domain_dict, 0.0, 0.0, time_elipsed
+    
+    
