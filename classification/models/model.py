@@ -65,20 +65,25 @@ def get_timm_model(model_name, ckpt=None, num_classes=10):
         raise ValueError(f"Model '{model_name}' is not available. Choose from: {available_models}")
 
     # setup pre-trained model
-    model = timm.create_model(model_name, pretrained=False, checkpoint_path=ckpt, num_classes=num_classes)
+    if ckpt is not None:
+        model = timm.create_model(model_name, pretrained=True, checkpoint_path=ckpt, num_classes=num_classes)
+    else:
+        model = timm.create_model(model_name, pretrained=True, num_classes=num_classes)
     logger.info(f"Successfully restored the weights of '{model_name}' from timm.")
     logger.info(f"Num of classes is '{num_classes}' from timm.")
 
     # NOTE add the corresponding input normalization to the model
     if hasattr(model, "pretrained_cfg"):
-        logger.info(f"General model information: {model.pretrained_cfg}")
-        logger.info(f"Adding input normalization to the model using: mean={model.pretrained_cfg['mean']} \t std={model.pretrained_cfg['std']}")
-        model = normalize_model(model, mean=model.pretrained_cfg["mean"], std=model.pretrained_cfg["std"])
-
+        # logger.info(f"General model information: {model.pretrained_cfg}")
+        uniform_stat = (0.5, 0.5, 0.5)
+        # logger.info(f"Adding input normalization to the model using: mean={model.pretrained_cfg['mean']} \t std={model.pretrained_cfg['std']}")
+        # model = normalize_model(model, mean=model.pretrained_cfg["mean"], std=model.pretrained_cfg["std"])
+        model = normalize_model(model, mean=uniform_stat, std=uniform_stat)
     elif hasattr(model, "default_cfg"):
-        logger.info(f"General model information: {model.default_cfg}")
-        logger.info(f"Adding input normalization to the model using: mean={model.default_cfg['mean']} \t std={model.default_cfg['std']}")
-        model = normalize_model(model, mean=model.default_cfg["mean"], std=model.default_cfg["std"])
+        # logger.info(f"General model information: {model.default_cfg}")
+        # logger.info(f"Adding input normalization to the model using: mean={model.default_cfg['mean']} \t std={model.default_cfg['std']}")
+        # model = normalize_model(model, mean=model.default_cfg["mean"], std=model.default_cfg["std"])
+        model = normalize_model(model, mean=uniform_stat, std=uniform_stat)
     else:
         raise AttributeError(f"Attribute 'pretrained_cfg' is missing for model '{model_name}' from timm."
                              f" This prevents adding the correct input normalization to the model!")
@@ -252,27 +257,6 @@ class ImageNetXWrapper(torch.nn.Module):
         return self.masking_layer(logits)
 
 
-# class TransformerWrapper(torch.nn.Module):
-#     def __init__(self, model):
-#         super().__init__()
-#         self.__dict__ = model.__dict__.copy()
-
-#     def forward(self, x):
-#         # Reshape and permute the input tensor
-#         x = self.normalize(x)
-#         x = self.model._process_input(x)
-#         n = x.shape[0]
-
-#         # Expand the class token to the full batch
-#         batch_class_token = self.model.class_token.expand(n, -1, -1)
-#         x = torch.cat([batch_class_token, x], dim=1)
-
-#         x = self.model.encoder(x)
-
-#         # Classifier "token" as used by standard language architectures
-#         x = x[:, 0]
-#         return x
-
 
 class TransformerWrapper(nn.Module):
     def __init__(self, model):
@@ -411,20 +395,13 @@ def split_up_model(model, arch_name, dataset_name):
         model = TransformerWrapper(model)
         return model, model
 
-
 import torch
 import torch.nn as nn
 
 def split_vit_model(full_model):
-    # Extract the 'norm' and 'model' parts
+    
+    classifier = full_model.model.head
     norm = full_model.normalize
-    model_children = list(full_model.model.children())
-    
-    # Create the encoder by concatenating 'norm' and all layers except the last one
-    encoder_layers = [norm] + model_children[:-2]
-    encoder = nn.Sequential(*encoder_layers)
-    
-    # Extract the classification head
-    classifier = nn.Sequential(*model_children[-2:])
-    
-    return encoder, classifier
+
+    return norm, classifier, full_model
+
