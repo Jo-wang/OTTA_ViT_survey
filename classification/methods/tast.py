@@ -5,6 +5,7 @@ from typing import List
 from methods.base import TTAMethod
 from models.model import split_vit_model
 
+
 import copy
             
 def softmax_entropy(x: torch.Tensor) -> torch.Tensor:
@@ -129,18 +130,27 @@ class TAST(TTAMethod):
         super().__init__(cfg, model, num_classes)
         self.model = model
         # trained feature extractor and last linear classifier
-        self.featurizer, self.classifier = split_vit_model(model)
+        self.norm, self.classifier, self.model = split_vit_model(model)
 
         # store supports and corresponding labels
         # warmup_supports = self.model.get_classifier().weight.data
-        warmup_supports = self.classifier[1].weight.data # 10,768
+        # NOTE: disregard the identity head, grab the feature from only the linear classifier
+        if "swin" in cfg.MODEL.ARCH:
+            warmup_supports = self.classifier.fc.weight.data
+        else:
+            warmup_supports = self.classifier.weight.data # 10,768
         self.warmup_supports = warmup_supports
-        warmup_prob = self.classifier(self.warmup_supports)
+        
+      
+        if "swin" in cfg.MODEL.ARCH:
+            warmup_prob = self.classifier.fc(self.warmup_supports)  # 1000, 1000
+        else:
+            warmup_prob = self.classifier(self.warmup_supports)  # 1000, 1000
         self.warmup_labels = F.one_hot(warmup_prob.argmax(1), num_classes=num_classes).float()
         self.warmup_ent = softmax_entropy(warmup_prob)
         self.ent = self.warmup_ent.data
 
-        self.supports = self.warmup_supports.data   # 10*768
+        self.supports = self.warmup_supports.data   # 1000*768
         self.labels = self.warmup_labels.data     #10*10
 
         # hparams
@@ -154,28 +164,39 @@ class TAST(TTAMethod):
         self.k = cfg.k
         self.cached_loader = cfg.cached_loader
         self.n_inputs = 3  # channel
-        self.n_outputs = 768   # feature channel dimension
+        if "swin" in cfg.MODEL.ARCH:
+            self.n_outputs = 1024
+        else:
+            self.n_outputs = 768   # feature channel dimension
         #dim = torch.Size([16, 196, 768])
 
         # multiple projection heads and its optimizer
         self.mlps = BatchEnsemble(self.n_outputs, self.n_outputs // 4, self.num_ensemble,
-                                  self.init_mode).cuda()
-        self.optimizer = torch.optim.Adam(self.mlps.parameters(), lr=self.lr)
+                                  self.init_mode).cuda()   # 768, 192, 5
+        if self.cfg.OPTIM.METHOD == "Adam":
+            self.optimizer = torch.optim.Adam(self.mlps.parameters(), lr=self.lr)
+        elif self.cfg.OPTIM.METHOD == "SGD":
+            self.optimizer = torch.optim.SGD(self.mlps.parameters(), lr=self.lr)
 
     def forward(self, x, adapt=True):
         if not self.cached_loader:
-            z = self.featurizer(x)
-            # GAP
-            
+            z = self.model.model.forward_features(x)   # bs, 197, 768
+            # GAP 
         else:
             z = x
 
         if adapt:
-            z = z[:, 0]
-            p_supports = self.classifier(z)
+            if "swin" in self.cfg.MODEL.ARCH:
+                z = self.model.model.head.global_pool(z)
+            else:
+                z = z[:, 0]
+            # p_supports = self.classifier(z)
+            p_supports = self.model(x)
             # p_supports = p_supports.squeeze()
-            yhat = torch.nn.functional.one_hot(p_supports.argmax(1), num_classes=self.num_classes).float()
+            yhat = torch.nn.functional.one_hot(p_supports.argmax(-1), num_classes=self.num_classes).float()
             ent = softmax_entropy(p_supports)
+            
+           
             self.supports = torch.cat([self.supports, z])
             self.labels = torch.cat([self.labels, yhat])
             self.ent = torch.cat([self.ent, ent])
@@ -283,7 +304,10 @@ class TAST(TTAMethod):
         self.ent = self.warmup_ent.data
 
         self.mlps.reset()
-        self.optimizer = torch.optim.Adam(self.mlps.parameters(), lr=self.lr)
+        if self.cfg.OPTIM.METHOD == "Adam":
+            self.optimizer = torch.optim.Adam(self.mlps.parameters(), lr=self.lr)
+        elif self.cfg.OPTIM.METHOD == "SGD":
+            self.optimizer = torch.optim.SGD(self.mlps.parameters(), lr=self.lr)
 
         torch.cuda.empty_cache()
 
@@ -400,7 +424,7 @@ class TAST_BN(TTAMethod):
         adapted_algorithm.featurizer, _ = split_vit_model(adapted_algorithm)
         adapted_algorithm.featurizer = self.configure_model(adapted_algorithm.featurizer)
         params, param_names = self.collect_params(adapted_algorithm.featurizer)
-        optimizer = torch.optim.Adam(params, lr=self.lr)
+        optimizer = torch.optim.SGD(params, lr=self.lr)
 
         return adapted_algorithm, optimizer
 
@@ -482,6 +506,7 @@ class TAST_BN(TTAMethod):
 
         loss.backward()
         self.optimizer.step()
+        # self.scheduler.step()
 
         return outputs
 
